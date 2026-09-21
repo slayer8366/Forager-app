@@ -49,6 +49,7 @@ import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.presentation.ConditionsUiState
 import com.zynergy.forager.presentation.EquirectangularProjection
+import com.zynergy.forager.presentation.locationLabel
 import com.zynergy.forager.presentation.Notice
 import com.zynergy.forager.presentation.PlanTimingUiState
 import com.zynergy.forager.presentation.SeasonalityUiState
@@ -111,6 +112,18 @@ class JournalScreenState(private val container: AppContainer) {
 
     fun hasLocationPermission(): Boolean = container.location.hasPermission()
 
+    /**
+     * Called when the user declines. Also what happens with no dialog at all once Android has
+     * stopped asking after repeated refusals, which is why the message points at system settings.
+     */
+    fun locationPermissionRefused() {
+        locating = false
+        locationNotice = Notice.NotAvailable(
+            "your location, because permission was not given. The entry can still be saved " +
+                "without one, or allow location for Forager in system settings",
+        )
+    }
+
     fun clearPendingFix() {
         pendingFix = null
         locationNotice = null
@@ -153,7 +166,7 @@ private fun LocationRow(state: JournalScreenState) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) scope.launch { state.captureLocation() }
+        if (granted) scope.launch { state.captureLocation() } else state.locationPermissionRefused()
     }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -188,11 +201,13 @@ private fun LocationRow(state: JournalScreenState) {
 
         state.pendingFix?.let { fix ->
             Text(
-                if (fix.isPreciseEnoughForAFind) {
-                    "Location ready, accurate to about %.0f m".format(fix.accuracyMetres)
-                } else {
-                    "Location is only accurate to about %.0f m, which covers more ground than one patch"
-                        .format(fix.accuracyMetres)
+                when {
+                    fix.accuracyMetres == null -> "Location ready, but the device gave no accuracy for it"
+                    fix.isPreciseEnoughForAFind ->
+                        "Location ready, accurate to about %.0f m".format(fix.accuracyMetres)
+                    else ->
+                        "Location is only accurate to about %.0f m, which covers more ground than one patch"
+                            .format(fix.accuracyMetres)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (fix.isPreciseEnoughForAFind) Color(0xFF2E7D32) else Color(0xFF8A6D00),
@@ -263,7 +278,7 @@ fun JournalScreen(state: JournalScreenState) {
                             Text(entry.species?.displayName ?: "Unidentified", fontWeight = FontWeight.Medium)
                             if (entry.notes.isNotBlank()) Text(entry.notes)
                             Text(
-                                if (entry.isMappable) "Located" else "No location",
+                                locationLabel(entry.where),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -419,12 +434,15 @@ fun MapScreen(
 
                 // Every fix is drawn as the area it actually claims. Only a fix inside the app's
                 // accuracy limit also gets a solid dot, so a coarse one never reads as a point.
-                val radii = projection.radiiFor(fix.accuracyMetres, fix.coordinates)
-                drawOval(
-                    color = Color(0x331B5E20),
-                    topLeft = Offset(centre.x - radii.x, centre.y - radii.y),
-                    size = androidx.compose.ui.geometry.Size(radii.x * 2, radii.y * 2),
-                )
+                // With no measured radius there is no area to draw, so none is invented.
+                fix.accuracyMetres?.let { metres ->
+                    val radii = projection.radiiFor(metres, fix.coordinates)
+                    drawOval(
+                        color = Color(0x331B5E20),
+                        topLeft = Offset(centre.x - radii.x, centre.y - radii.y),
+                        size = androidx.compose.ui.geometry.Size(radii.x * 2, radii.y * 2),
+                    )
+                }
                 if (fix.isPreciseEnoughForAFind) {
                     drawCircle(Color(0xFF1B5E20), radius = 9f, center = centre)
                 } else {

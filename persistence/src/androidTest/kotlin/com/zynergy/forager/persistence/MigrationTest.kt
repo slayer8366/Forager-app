@@ -95,6 +95,9 @@ class MigrationTest {
             "but with no measured accuracy it must not read as a confident point",
             !entry.hasPreciseLocation,
         )
-        assertNull(null)
+        assertNull(
+            "and the accuracy stays unknown, not replaced with a stand-in number",
+            entry.where?.accuracyMetres,
+        )
     }
 }

@@ -10,13 +10,6 @@ import com.zynergy.forager.domain.TripPlan
 import java.time.Instant
 import java.time.LocalDate
 
-/**
- * Stands in for the accuracy of a pre-version-2 entry.
- *
- * Just above the app's usable limit, so such an entry is mappable but never counts as precise.
- * Chosen to fail the check rather than to look like a measurement.
- */
-internal const val UNKNOWN_ACCURACY_METRES = Fix.USABLE_ACCURACY_METRES + 1.0
 
 internal fun JournalEntry.toRow() = JournalEntryRow(
     id = id,
@@ -54,10 +47,8 @@ internal fun JournalEntryRow.toEntry(): JournalEntry {
     val where = if (latitude != null && longitude != null) {
         Fix(
             coordinates = Coordinates(latitude, longitude),
-            // Version 1 rows have no accuracy. Rather than invent one, they are treated as the
-            // coarsest thing the app will still draw, so an old entry is never shown as a
-            // confident point on the strength of a number that was never measured.
-            accuracyMetres = locationAccuracyMetres ?: UNKNOWN_ACCURACY_METRES,
+            // Null for version 1 rows, which never measured one. Passed through as unknown.
+            accuracyMetres = locationAccuracyMetres,
         )
     } else {
         null

@@ -184,4 +184,54 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   longitude at version 1, `persistence/schemas/...1.json` is committed, and the
   accuracy column becomes version 2 in the same change as the code that reads it.
 
-- **C next.** Device location, which brings migration 1 to 2.
+- **C done.** Device location with its accuracy, migration 1 to 2, checked on the
+  emulator through the real system permission dialog. What that run turned up:
+  - **A placeholder of my own, shown as a measurement.** To stop version 1 rows ever
+    reading as precise, the mapper gave them a stand-in accuracy of 51 m. The journal
+    label then printed it: "Rough location only, within about 50 m", for a row whose
+    accuracy was never measured. It was the same kind of made-up value this session
+    removed from the journal earlier, and it got in by being a well-intended
+    constant rather than a random number. Accuracy is now nullable, null means never
+    measured, and each reader handles it: the label says so and the map draws no
+    area. A revert check restored the stand-in, and the one test aimed at it failed
+    quoting the old "within about 50" text.
+  - **Refusing permission did nothing.** The callback only handled a grant, so after
+    "Don't allow" the screen stayed exactly as it was. Reproduced on the emulator
+    first, then fixed: a refusal now says what happened and where to change it.
+
+  **Crossing 1 has paid off.** Drawing a fix as the area it claims needed ground
+  metres turned into pixels. Because the projection was already one tested class,
+  that is one new function with two tests. It returns separate x and y radii, since
+  on this plot a ground circle is an ellipse. Without step A, that arithmetic would
+  have gone into the Composable as a third untested copy.
+
+  **What was not checked on a device:** location switched off, the 20 second
+  timeout, and the stale cached-fix refusal. The emulator always reports about
+  5 m, so coarse fixes were checked by writing rows straight into the real
+  database and reading them through the app. The upgrade path was checked only by
+  the migration test. Nobody has yet installed the old APK and upgraded over it.
+
+  **Environment.** A build was killed by the out-of-memory killer mid-session and
+  took the emulator with it. There was 1 GB free before the instrumented run that
+  followed. The emulator now starts headless with a 1.5 GB limit. Work is pushed
+  before each device run, because this machine has shown it can lose both at once.
+
+## D, the basemap, needs a decision before code
+
+Crossing 3 above decided where tiles live. What it did not decide is **whose tiles**,
+and that is not mine to pick:
+
+- **OpenStreetMap's own tile servers** are free, but their usage policy forbids
+  bulk or offline prefetching. Offline tiles are the one feature a forager in a
+  valley with no signal actually needs.
+- **A commercial provider**, such as MapTiler, Stadia or Thunderforest, allows
+  offline use within a plan's terms. It needs an API key and an account in the
+  owner's name, and it may cost money.
+- **Self-hosted or pre-built vector tiles**, such as a Protomaps extract, carry no
+  per-request cost and allow offline use. They mean hosting a file somewhere, or
+  shipping regions inside the app.
+
+This changes the dependency, the licence text the app must show, and whether
+offline is possible at all. So it is recorded here as an open decision rather than
+guessed. The projection's Mercator conversion can be built without it; the tile
+source cannot.

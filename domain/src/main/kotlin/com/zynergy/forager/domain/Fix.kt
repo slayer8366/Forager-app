@@ -9,7 +9,11 @@ package com.zynergy.forager.domain
  * looks exactly like a position good to a few metres.
  *
  * [accuracyMetres] is the radius the platform reports, conventionally at 68% confidence. The true
- * position is not guaranteed to be inside it.
+ * position is not guaranteed to be inside it. Null means no radius was ever measured, which is the
+ * case for entries saved before accuracy was recorded. That is kept as its own state rather than
+ * filled with a stand-in number, because any number put there would be shown to the user as if it
+ * had been measured. An earlier version of this app did exactly that and labelled such entries
+ * "within about 50 m" on the strength of a constant.
  *
  * There is deliberately no timestamp here. How old a fix is matters intensely while it is being
  * captured, because the platform will hand back a cached position from an hour ago without
@@ -19,11 +23,13 @@ package com.zynergy.forager.domain
  */
 data class Fix(
     val coordinates: Coordinates,
-    val accuracyMetres: Double,
+    val accuracyMetres: Double?,
 ) {
     init {
-        require(accuracyMetres > 0.0) { "accuracy must be positive; $accuracyMetres is not a radius" }
-        require(!accuracyMetres.isNaN()) { "accuracy cannot be NaN" }
+        if (accuracyMetres != null) {
+            require(!accuracyMetres.isNaN()) { "accuracy cannot be NaN" }
+            require(accuracyMetres > 0.0) { "accuracy must be positive; $accuracyMetres is not a radius" }
+        }
     }
 
     /**
@@ -34,7 +40,8 @@ data class Fix(
      * hardware can produce, not what is safe to build on, so the app states its own limit rather
      * than accepting whatever arrives.
      */
-    val isPreciseEnoughForAFind: Boolean get() = accuracyMetres <= USABLE_ACCURACY_METRES
+    val isPreciseEnoughForAFind: Boolean
+        get() = accuracyMetres != null && accuracyMetres <= USABLE_ACCURACY_METRES
 
     val latitude: Double get() = coordinates.latitude
     val longitude: Double get() = coordinates.longitude

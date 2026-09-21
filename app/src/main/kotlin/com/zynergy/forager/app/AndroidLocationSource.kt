@@ -78,7 +78,7 @@ class AndroidLocationSource(private val context: Context) : LocationSource {
             }
             .filter { now - it.time <= MAX_CACHED_AGE_MILLIS }
             .mapNotNull { location -> location.toFix().let { (it as? Outcome.Ok)?.value } }
-            .minByOrNull { it.accuracyMetres }
+            .minByOrNull { it.accuracyMetres ?: Double.MAX_VALUE }
     }
 
     private suspend fun awaitSingleUpdate(manager: LocationManager): Location? =

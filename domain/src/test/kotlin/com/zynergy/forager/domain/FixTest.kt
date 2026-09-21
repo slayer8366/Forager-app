@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private val WHEN = Instant.parse("2026-09-20T12:00:00Z")
-private fun fix(accuracy: Double) = Fix(Coordinates(47.5, -122.5), accuracy)
+private fun fix(accuracy: Double?) = Fix(Coordinates(47.5, -122.5), accuracy)
 
 class FixTest {
 
@@ -15,6 +15,11 @@ class FixTest {
     fun `a radius of zero or less is not a radius`() {
         assertFailsWith<IllegalArgumentException> { fix(0.0) }
         assertFailsWith<IllegalArgumentException> { fix(-5.0) }
+    }
+
+    @Test
+    fun `a fix with no measured accuracy is never treated as precise`() {
+        assertFalse(fix(null).isPreciseEnoughForAFind)
     }
 
     @Test
@@ -37,7 +42,7 @@ class FixTest {
             "the platform will hand over a 2 km radius and call it a location",
         )
         // Not rejected: it is real information, and throwing it away would be worse.
-        assertTrue(coarse.accuracyMetres > 0)
+        assertTrue(coarse.accuracyMetres!! > 0)
     }
 }
 
