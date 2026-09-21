@@ -3,6 +3,8 @@ package com.zynergy.forager.app
 import com.zynergy.forager.data.inaturalist.HttpResponse
 import com.zynergy.forager.data.inaturalist.HttpTransport
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import com.zynergy.forager.data.inaturalist.INaturalistCatalog
 import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
 import com.zynergy.forager.data.openmeteo.OpenMeteoWeatherSource
@@ -77,6 +79,9 @@ class UuidIdSource : IdSource {
 class AppContainer(context: Context) {
     private val stores = ForagerStores.open(context)
     val location: LocationSource = AndroidLocationSource(context)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val mapSettings = MapSettings(context)
+    val offlineMaps = OfflineMaps(MapLibreOfflineRegionStore(context), appScope)
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
     private val terrain = UnavailableTerrainSource()
     private val weather = OpenMeteoWeatherSource(AndroidHttpTransport())

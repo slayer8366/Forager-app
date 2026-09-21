@@ -25,11 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.zynergy.forager.data.basemap.OfflineSource
 import com.zynergy.forager.data.basemap.OsmRasterStyle
+import com.zynergy.forager.domain.offline.MapStyle
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
 import com.zynergy.forager.presentation.MapOverlay
-import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -54,9 +55,9 @@ private const val MARKER_SOURCE = "entry-markers"
 /**
  * The basemap, with the planning area and journal entries drawn over it.
  *
- * Hosted as a plain MapView, the way the owner's earlier app did after trying the alternatives. The
- * style is set exactly once, because every setStyle call wipes all sources and layers and flashes
- * the map blank; afterwards only the GeoJSON sources are updated. The camera is positioned once,
+ * Hosted as a plain MapView, the way the owner's earlier app did after trying the alternatives. A
+ * style is set only when the chosen style changes, because every setStyle call wipes all sources and
+ * layers and flashes the map blank; otherwise only the GeoJSON sources are updated. The camera is positioned once,
  * on the planning area, and never pushed again, so moving the area does not yank the view away from
  * wherever the user has panned to.
  *
@@ -68,17 +69,21 @@ private const val MARKER_SOURCE = "entry-markers"
 fun BasemapView(
     overlay: MapOverlay,
     initialArea: BoundingBox,
+    style: MapStyle,
     onTap: (Coordinates) -> Unit,
+    onCentreChanged: (Coordinates) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnCentre by rememberUpdatedState(onCentreChanged)
+    var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var appliedStyle by remember { mutableStateOf<MapStyle?>(null) }
     var styled by remember { mutableStateOf<Pair<MapLibreMap, Style>?>(null) }
 
     val mapView = remember {
-        MapLibre.getInstance(context)
-        BasemapHttp.install(context)
+        initializeMapLibre(context)
         MapView(context).apply {
             onCreate(null)
             // The screen scrolls vertically, and a scrolling parent otherwise takes over any drag
@@ -89,18 +94,30 @@ fun BasemapView(
                 }
                 false
             }
-            getMapAsync { map ->
-                map.setMaxZoomPreference(OsmRasterStyle.MAX_ZOOM.toDouble())
-                map.uiSettings.isCompassEnabled = false
-                map.addOnMapClickListener { at ->
+            getMapAsync { ready ->
+                ready.setMaxZoomPreference(OsmRasterStyle.MAX_ZOOM.toDouble())
+                ready.uiSettings.isCompassEnabled = false
+                ready.addOnMapClickListener { at ->
                     currentOnTap(Coordinates(at.latitude, at.longitude))
                     false
                 }
-                map.setStyle(Style.Builder().fromJson(OsmRasterStyle.json())) { style ->
-                    addOverlayLayers(style)
-                    map.moveCamera(CameraUpdateFactory.newLatLngBounds(initialArea.toLatLngBounds(), 48))
-                    styled = map to style
+                ready.addOnCameraIdleListener {
+                    val position = ready.cameraPosition
+                    position.target?.let {
+                        MapCameraMemory.last = MapCameraMemory.Saved(it.latitude, it.longitude, position.zoom)
+                        currentOnCentre(Coordinates(it.latitude, it.longitude))
+                    }
                 }
+                // Back where the user left it if they have moved the map this session, otherwise the
+                // planning area. Leaving the tab rebuilds the MapView, and a camera that reset every
+                // time would throw away where they had panned to.
+                val saved = MapCameraMemory.last
+                if (saved != null) {
+                    ready.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(saved.latitude, saved.longitude), saved.zoom))
+                } else {
+                    ready.moveCamera(CameraUpdateFactory.newLatLngBounds(initialArea.toLatLngBounds(), 48))
+                }
+                map = ready
             }
         }
     }
@@ -133,6 +150,23 @@ fun BasemapView(
         }
     }
 
+    // setStyle wipes every source and layer, so it runs only when the chosen style actually changes,
+    // and the overlay layers are rebuilt in its callback. The camera is left where the user put it.
+    LaunchedEffect(map, style) {
+        val ready = map ?: return@LaunchedEffect
+        if (appliedStyle == style) return@LaunchedEffect
+        appliedStyle = style
+        styled = null
+        val builder = when (style) {
+            MapStyle.ONLINE -> Style.Builder().fromJson(OsmRasterStyle.json())
+            MapStyle.OFFLINE -> Style.Builder().fromUri(OfflineSource.STYLE_URL)
+        }
+        ready.setStyle(builder) { loaded ->
+            addOverlayLayers(loaded)
+            styled = ready to loaded
+        }
+    }
+
     LaunchedEffect(styled, overlay) {
         val (_, style) = styled ?: return@LaunchedEffect
         style.getSourceAs<GeoJsonSource>(AREA_SOURCE)?.setGeoJson(
@@ -159,7 +193,7 @@ fun BasemapView(
         // Always visible, not behind MapLibre's tap-to-reveal button: OSM's policy asks for the
         // attribution to be shown clearly on the map.
         Text(
-            OsmRasterStyle.ATTRIBUTION,
+            if (style == MapStyle.OFFLINE) OfflineSource.ATTRIBUTION else OsmRasterStyle.ATTRIBUTION,
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -214,3 +248,10 @@ private fun Coordinates.toPoint(): Point = Point.fromLngLat(longitude, latitude)
 
 private fun BoundingBox.toLatLngBounds(): LatLngBounds =
     LatLngBounds.Builder().include(LatLng(south, west)).include(LatLng(north, east)).build()
+
+/** Where the map camera was last left, for the life of the process. */
+object MapCameraMemory {
+    data class Saved(val latitude: Double, val longitude: Double, val zoom: Double)
+
+    @Volatile var last: Saved? = null
+}

@@ -1,6 +1,17 @@
 package com.zynergy.forager.app
 
 import android.Manifest
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import com.zynergy.forager.domain.BoundingBox
+import com.zynergy.forager.domain.offline.MapStyle
+import com.zynergy.forager.domain.offline.OfflineDownloadPlan
+import com.zynergy.forager.domain.offline.OfflineStyleMode
+import com.zynergy.forager.domain.offline.chooseMapStyle
+import com.zynergy.forager.domain.offline.shouldSuggestOfflineStyle
+import com.zynergy.forager.domain.offline.tilesUsed
+import com.zynergy.forager.presentation.allowanceText
+import com.zynergy.forager.presentation.offlinePlanText
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -412,17 +423,34 @@ fun MapScreen(
         )
 
         val overlay = remember(area, located) { MapOverlayBuilder.build(area, located) }
-        BasemapView(
-            overlay = overlay,
-            initialArea = area,
-            onTap = draft::centreOn,
-            modifier = Modifier.fillMaxWidth().height(320.dp).padding(16.dp),
-        )
         val tileHealth by BasemapHttp.health.collectAsState()
         val context = LocalContext.current
         val online by remember(context) { context.networkOnline() }.collectAsState(initial = true)
+        val offline = container.offlineMaps
+        val mode by container.mapSettings.offlineStyleMode.collectAsState(initial = MapSettings.DEFAULT_MODE)
+        val regions by offline.regions.collectAsState()
+        val manualStyle by offline.manualStyle.collectAsState()
+        var centre by remember { mutableStateOf(area.centre()) }
+        val style = chooseMapStyle(mode, online, centre, regions, manualStyle)
+        LaunchedEffect(Unit) { offline.refresh() }
+
+        BasemapView(
+            overlay = overlay,
+            initialArea = area,
+            style = style,
+            onTap = draft::centreOn,
+            onCentreChanged = { centre = it },
+            modifier = Modifier.fillMaxWidth().height(320.dp).padding(16.dp),
+        )
         basemapNotice(online, tileHealth)?.let {
             NoticeLine(Notice.Problem(it), tag = "tile-problem", problemTitle = "Background map")
+        }
+        if (shouldSuggestOfflineStyle(mode, online, style)) {
+            Text(
+                "You are offline. Switch to the offline map style below to see saved areas.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp).testTag("suggest-offline-style"),
+            )
         }
 
         Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -433,6 +461,8 @@ fun MapScreen(
                 Text("Bigger area")
             }
         }
+
+        OfflineMapsSection(container, area, mode, style)
 
         if (charted == null) {
             Text(
@@ -716,4 +746,115 @@ private fun TripDatePicker(current: LocalDate, onPicked: (LocalDate) -> Unit, on
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     ) { DatePicker(state = state) }
+}
+
+/**
+ * Saving the planning area for offline use, the saved regions, and when to use the offline style.
+ *
+ * The plan is shown in words before anything downloads, including what detail is given up when the
+ * allowance is short, so a reduced download is never a surprise found later in the field.
+ */
+@Composable
+private fun OfflineMapsSection(container: AppContainer, area: BoundingBox, mode: OfflineStyleMode, style: MapStyle) {
+    val scope = rememberCoroutineScope()
+    val offline = container.offlineMaps
+    val regions by offline.regions.collectAsState()
+    val progress by offline.progress.collectAsState()
+    val problem by offline.problem.collectAsState()
+    val plan = remember(area, regions) { offline.plan(area) }
+
+    Column(modifier = Modifier.padding(16.dp).testTag("offline-section")) {
+        Text("Offline maps", style = MaterialTheme.typography.titleSmall)
+        Text(
+            allowanceText(regions.tilesUsed()),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.testTag("offline-allowance"),
+        )
+        Text(
+            offlinePlanText(plan),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp).testTag("offline-plan"),
+        )
+        if (offline.partlyOutsideCoverage(area) && plan != OfflineDownloadPlan.OutsideCoverage) {
+            Text(
+                "Part of this area is outside the offline map's coverage and will stay blank offline.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("offline-partial-coverage"),
+            )
+        }
+        val canSave = plan is OfflineDownloadPlan.FullDetail || plan is OfflineDownloadPlan.ReducedDetail
+        Button(
+            onClick = {
+                val c = area.centre()
+                offline.save("Area around %.2f, %.2f".format(c.latitude, c.longitude), area)
+            },
+            enabled = canSave && progress == null,
+            modifier = Modifier.padding(top = 4.dp).testTag("save-offline"),
+        ) { Text("Save this area offline") }
+
+        progress?.let { p ->
+            Text(
+                if (p.required > 0) "Downloading: ${p.completed} of ${p.required} resources" else "Starting download...",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("offline-progress"),
+            )
+        }
+        problem?.let { NoticeLine(Notice.Problem(it), tag = "offline-problem", problemTitle = "Offline maps") }
+
+        regions.forEach { r ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("offline-region-${r.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(r.name, fontWeight = FontWeight.Medium)
+                    Text(
+                        "To zoom ${r.maxZoom} · ${"%,d".format(r.tiles)} tiles · " +
+                            if (r.complete) "ready offline" else "unfinished, still counts against the allowance",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                TextButton(onClick = { offline.delete(r.id) }, enabled = progress == null) { Text("Delete") }
+            }
+        }
+
+        Text(
+            "Offline map style",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Text(
+            "Saved areas can only be drawn in the offline style, which looks different and has no place names.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        listOf(
+            OfflineStyleMode.WHEN_OFFLINE to "When the connection drops",
+            OfflineStyleMode.INSIDE_SAVED_REGIONS to "Whenever the map is inside a saved area",
+            OfflineStyleMode.MANUAL to "Only when I switch it",
+        ).forEach { (option, label) ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { scope.launch { container.mapSettings.setOfflineStyleMode(option) } }
+                    .testTag("style-mode-${option.name}"),
+            ) {
+                RadioButton(
+                    selected = mode == option,
+                    onClick = { scope.launch { container.mapSettings.setOfflineStyleMode(option) } },
+                )
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (mode == OfflineStyleMode.MANUAL) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Use the offline style now", modifier = Modifier.weight(1f))
+                Switch(
+                    checked = style == MapStyle.OFFLINE,
+                    onCheckedChange = { offline.manualStyle.value = if (it) MapStyle.OFFLINE else MapStyle.ONLINE },
+                    modifier = Modifier.testTag("manual-offline-style"),
+                )
+            }
+        }
+    }
 }

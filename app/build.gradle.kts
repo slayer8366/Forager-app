@@ -37,6 +37,7 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.maplibre.android)
     implementation(libs.okhttp)
+    implementation(libs.datastore.preferences)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
