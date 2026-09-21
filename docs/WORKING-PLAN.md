@@ -238,6 +238,17 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   means deciding whether a plan is edited in place or copied. That is a small design
   decision, recorded here rather than guessed.
 
+- **Open: journal entries cannot carry a species.** The only save path, the quick
+  note on the Journal tab, passes `species = null`
+  (`app/.../Screens.kt:143`). Every entry reads "Unidentified", and the four species
+  columns are only ever written by tests. Two conventional shapes, and the choice is
+  the owner's:
+  1. **Name it in the entry.** The journal form gets a species search with
+     "Unknown" allowed, the way iNaturalist's new-observation screen works.
+  2. **Record from the species.** A result on the Species tab gets a "Record a
+     find" action that opens the journal with that species filled in.
+  They are not exclusive, but they build different screens.
+
 ## D, the basemap, needs a decision before code
 
 Crossing 3 above decided where tiles live. What it did not decide is **whose tiles**,
