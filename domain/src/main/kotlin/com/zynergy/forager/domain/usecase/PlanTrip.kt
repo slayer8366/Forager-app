@@ -26,6 +26,35 @@ class PlanTrip(
         date: LocalDate,
         area: BoundingBox,
         targets: List<Species>,
+    ): Outcome<TripPlan> = checkAndSave(ids.newId(), name, date, area, targets)
+
+    /**
+     * Saves changes to the plan with [id], keeping the id, so the edited plan replaces the stored
+     * one instead of appearing beside it.
+     *
+     * The same rules as a new plan apply, including the past-date refusal. A plan can only be opened
+     * for editing from the upcoming list, so the one way to meet that refusal here is an edit left
+     * open across midnight on the plan's own day. Refusing it keeps one rule for every saved plan
+     * rather than a special case, and the refusal says what to change.
+     */
+    suspend fun update(
+        id: String,
+        name: String,
+        date: LocalDate,
+        area: BoundingBox,
+        targets: List<Species>,
+    ): Outcome<TripPlan> = checkAndSave(id, name, date, area, targets)
+
+    /** Saves a copy of [plan] under a new id, named so the copy and the original can be told apart. */
+    suspend fun duplicate(plan: TripPlan): Outcome<TripPlan> =
+        checkAndSave(ids.newId(), "${plan.name} (copy)", plan.date, plan.area, plan.targets)
+
+    private suspend fun checkAndSave(
+        id: String,
+        name: String,
+        date: LocalDate,
+        area: BoundingBox,
+        targets: List<Species>,
     ): Outcome<TripPlan> {
         if (name.isBlank()) return Outcome.Failed("a plan needs a name")
         if (date.isBefore(clock.today())) {
@@ -35,7 +64,7 @@ class PlanTrip(
         if (duplicate != null) {
             return Outcome.Failed("${duplicate.first().displayName} is listed twice")
         }
-        val plan = TripPlan(ids.newId(), name.trim(), date, area, targets)
+        val plan = TripPlan(id, name.trim(), date, area, targets)
         return store.save(plan)
     }
 }

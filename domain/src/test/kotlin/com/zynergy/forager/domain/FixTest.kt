@@ -49,7 +49,7 @@ class FixTest {
 class EntryLocationQualityTest {
 
     private fun entryWith(fix: Fix?) =
-        JournalEntry("e1", WHEN, null, "a note", fix)
+        entryOf("e1", WHEN, null, "a note", fix)
 
     @Test
     fun `an entry with no fix is neither mappable nor precise`() {

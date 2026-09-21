@@ -82,26 +82,26 @@ class JournalEntryTest {
     @Test
     fun `an entry with neither species nor notes records nothing and is refused`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            JournalEntry(id = "e1", recordedAt = when0, species = null, notes = "  ", where = null)
+            entryOf(id = "e1", at = when0, species = null, notes = "  ", where = null)
         }
         assertTrue(error.message!!.contains("records nothing"))
     }
 
     @Test
     fun `an unidentified find is valid when it carries notes`() {
-        val entry = JournalEntry("e1", when0, species = null, notes = "orange, on fir", where = null)
+        val entry = entryOf("e1", when0, species = null, notes = "orange, on fir", where = null)
         assertEquals("orange, on fir", entry.notes)
     }
 
     @Test
     fun `an entry without a fix is valid but not mappable`() {
-        val entry = JournalEntry("e1", when0, CHANTERELLE, "", where = null)
+        val entry = entryOf("e1", when0, CHANTERELLE, "", where = null)
         assertFalse(entry.isMappable)
     }
 
     @Test
     fun `an entry with a fix is mappable`() {
-        val entry = JournalEntry("e1", when0, CHANTERELLE, "", fixAt(47.5, -122.5))
+        val entry = entryOf("e1", when0, CHANTERELLE, "", fixAt(47.5, -122.5))
         assertTrue(entry.isMappable)
     }
 }

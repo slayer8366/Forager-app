@@ -56,11 +56,21 @@ class FakeJournalStore : JournalStore {
         return Outcome.Ok(entry)
     }
     override suspend fun all(): Outcome<List<JournalEntry>> = Outcome.Ok(saved.toList())
+
+    override suspend fun addIdentification(entryId: String, change: IdentificationChange): Outcome<JournalEntry> {
+        val index = saved.indexOfFirst { it.id == entryId }
+        if (index < 0) return Outcome.Failed("no entry $entryId")
+        val updated = saved[index].copy(identifications = saved[index].identifications + change)
+        saved[index] = updated
+        return Outcome.Ok(updated)
+    }
 }
 
+/** Replaces by id on save, as the Room store does, so an edit is seen to replace rather than add. */
 class FakeTripPlanStore : TripPlanStore {
     val saved = mutableListOf<TripPlan>()
     override suspend fun save(plan: TripPlan): Outcome<TripPlan> {
+        saved.removeAll { it.id == plan.id }
         saved += plan
         return Outcome.Ok(plan)
     }
@@ -77,6 +87,21 @@ class SequentialIds(private val prefix: String = "id-") : IdSource {
     private var next = 1
     override fun newId(): String = "$prefix${next++}"
 }
+
+/** An entry whose only identification is the one it was recorded with. */
+fun entryOf(
+    id: String,
+    at: Instant,
+    species: Species?,
+    notes: String,
+    where: Fix?,
+): JournalEntry = JournalEntry.first(
+    id = id,
+    recordedAt = at,
+    identification = species?.let { Identification.Taxon(it, TaxonSource.SEARCH) } ?: Identification.Unidentified,
+    notes = notes,
+    where = where,
+)
 
 fun species(id: String, scientific: String, common: String? = null) =
     Species(id, scientific, common, TaxonRank.SPECIES)

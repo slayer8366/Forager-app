@@ -24,6 +24,11 @@ data class PlanCriteria(
 
     fun withoutTarget(species: Species): PlanCriteria =
         copy(targets = targets.filterNot { it.catalogId == species.catalogId })
+
+    companion object {
+        /** A saved plan as a draft, for editing it. */
+        fun of(plan: TripPlan) = PlanCriteria(plan.area, plan.date, plan.targets, plan.name)
+    }
 }
 
 /**

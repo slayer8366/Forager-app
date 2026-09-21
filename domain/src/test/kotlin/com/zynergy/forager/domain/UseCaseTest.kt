@@ -66,7 +66,7 @@ class RecordSightingTest {
     fun `an empty form is refused and nothing is stored`() = runTest {
         val store = FakeJournalStore()
         val result = RecordSighting(store, FixedClock(NOW, TODAY), SequentialIds())(
-            species = null,
+            identification = Identification.Unidentified,
             notes = "",
         )
 
@@ -78,7 +78,7 @@ class RecordSightingTest {
     fun `a sighting takes its time from the clock and its id from the id source`() = runTest {
         val store = FakeJournalStore()
         val result = RecordSighting(store, FixedClock(NOW, TODAY), SequentialIds("entry-"))(
-            species = CHANTERELLE,
+            identification = Identification.Taxon(CHANTERELLE, TaxonSource.SEARCH),
             where = fixAt(47.5, -122.5),
         )
 
@@ -92,7 +92,7 @@ class RecordSightingTest {
     fun `a find with no name is stored when it has notes`() = runTest {
         val store = FakeJournalStore()
         val result = RecordSighting(store, FixedClock(NOW, TODAY), SequentialIds())(
-            species = null,
+            identification = Identification.Unidentified,
             notes = "small brown, under alder",
         )
 
@@ -151,9 +151,9 @@ class PlanTripTest {
         val ok = assertIs<Outcome.Ok<TripPlan>>(
             planner(store)("Walk", TODAY, PUGET_SOUND, listOf(CHANTERELLE)),
         )
-        val inside = JournalEntry("a", NOW, CHANTERELLE, "", fixAt(47.5, -122.5))
-        val outside = JournalEntry("b", NOW, CHANTERELLE, "", fixAt(40.0, -100.0))
-        val noFix = JournalEntry("c", NOW, CHANTERELLE, "", null)
+        val inside = entryOf("a", NOW, CHANTERELLE, "", fixAt(47.5, -122.5))
+        val outside = entryOf("b", NOW, CHANTERELLE, "", fixAt(40.0, -100.0))
+        val noFix = entryOf("c", NOW, CHANTERELLE, "", null)
 
         assertTrue(ok.value.covers(inside))
         assertTrue(!ok.value.covers(outside))
