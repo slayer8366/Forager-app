@@ -144,7 +144,9 @@ class IdentificationAndPlanEditingTest {
 
         launch {
             rule.onNodeWithTag("journal-list").performScrollToNode(hasTestTag("entry-${entry.id}"))
-            rule.onNodeWithTag("entry-identification-${entry.id}").performClick()
+            // The label is merged into the card's clickable area, so it is found in the unmerged tree;
+            // the touch lands on it and the card handles it.
+            rule.onNodeWithTag("entry-identification-${entry.id}", useUnmergedTree = true).performClick()
 
             rule.onNodeWithTag("entry-change-${entry.id}").performScrollTo().performClick()
             rule.onNodeWithTag("change-species-field").performTextInput(guess)
