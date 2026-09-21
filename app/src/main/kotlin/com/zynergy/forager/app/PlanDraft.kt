@@ -7,6 +7,7 @@ import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
 import com.zynergy.forager.domain.PlanCriteria
 import com.zynergy.forager.domain.Species
+import com.zynergy.forager.domain.TripPlan
 import java.time.LocalDate
 
 /**
@@ -54,6 +55,42 @@ class PlanDraft(today: LocalDate) {
     }
 
     fun chart(species: Species) { charted = species }
+
+    /**
+     * The saved plan open for editing, or null when the draft is a new plan.
+     *
+     * While a plan is open, the draft holds its values and every tab edits them, as it would a new
+     * plan. Nothing is written until Save. Whatever the draft held before is kept aside, so leaving
+     * the edit, by Save or by Cancel, puts it back.
+     */
+    var editing by mutableStateOf<TripPlan?>(null)
+        private set
+    private var beforeEdit: Pair<PlanCriteria, Species?>? = null
+
+    /** Opens [plan] for editing. Refused while another plan is open, so unsaved edits are not dropped. */
+    fun beginEdit(plan: TripPlan): Boolean {
+        if (editing != null) return false
+        beforeEdit = criteria to charted
+        editing = plan
+        criteria = PlanCriteria.of(plan)
+        charted = plan.targets.firstOrNull()
+        return true
+    }
+
+    /**
+     * Leaves the edit and restores the draft from before it. Used by Cancel, where the stored plan
+     * was never touched, and after a successful Save, where it now holds the edit.
+     *
+     * Clearing [editing] is what keeps the next Save from writing over the plan that was open: while
+     * it is set, Save keeps that plan's id.
+     */
+    fun endEdit() {
+        val (criteriaBefore, chartedBefore) = beforeEdit ?: return
+        criteria = criteriaBefore
+        charted = chartedBefore
+        editing = null
+        beforeEdit = null
+    }
 
     companion object {
         val DEFAULT_AREA = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
