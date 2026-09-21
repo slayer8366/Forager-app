@@ -3,6 +3,7 @@ package com.zynergy.forager.presentation
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
 import com.zynergy.forager.domain.Fix
+import com.zynergy.forager.domain.Identification
 import com.zynergy.forager.domain.JournalEntry
 import java.time.Instant
 import kotlin.math.asin
@@ -26,7 +27,7 @@ private fun haversine(a: Coordinates, b: Coordinates): Double {
 
 private val WHEN = Instant.parse("2026-09-20T12:00:00Z")
 private val AREA = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
-private fun entry(id: String, fix: Fix?) = JournalEntry(id, WHEN, null, "note", fix)
+private fun entry(id: String, fix: Fix?) = JournalEntry.first(id, WHEN, Identification.Unidentified, "note", fix)
 
 class MapOverlayTest {
 

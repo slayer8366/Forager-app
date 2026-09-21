@@ -40,7 +40,21 @@ class TripPlannerPresenter(
         date: LocalDate,
         area: BoundingBox,
         targets: List<Species>,
-    ): TripPlannerUiState = when (val outcome = planTrip(name, date, area, targets)) {
+    ): TripPlannerUiState = toUiState(planTrip(name, date, area, targets))
+
+    /** Saves changes to the plan with [id], keeping its id, under the same rules as a new plan. */
+    suspend fun saveChanges(
+        id: String,
+        name: String,
+        date: LocalDate,
+        area: BoundingBox,
+        targets: List<Species>,
+    ): TripPlannerUiState = toUiState(planTrip.update(id, name, date, area, targets))
+
+    /** Saves a copy of [plan] under a new id. */
+    suspend fun duplicate(plan: TripPlan): TripPlannerUiState = toUiState(planTrip.duplicate(plan))
+
+    private fun toUiState(outcome: Outcome<TripPlan>): TripPlannerUiState = when (outcome) {
         is Outcome.Ok -> TripPlannerUiState(saved = outcome.value)
         is Outcome.Partial -> TripPlannerUiState(saved = outcome.value, notice = Notice.Incomplete(outcome.note))
         is Outcome.Failed -> TripPlannerUiState(notice = Notice.Problem(outcome.reason))

@@ -9,12 +9,53 @@ import androidx.room.Transaction
 @Dao
 interface JournalDao {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * Inserts a new entry. An existing id is an error rather than a replacement: an entry's history
+     * only ever grows through [appendChange], and replacing the row here would be a way round that.
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(row: JournalEntryRow)
+
+    @Insert
+    suspend fun insertChanges(rows: List<IdentificationChangeRow>)
+
+    /** An entry and its first identifications, as one unit, so no entry is ever stored without one. */
+    @Transaction
+    suspend fun save(entry: JournalEntryRow, changes: List<IdentificationChangeRow>) {
+        insert(entry)
+        insertChanges(changes)
+    }
 
     /** Most recent first, which is the order the journal shows and so the order it should store. */
     @Query("SELECT * FROM journal_entry ORDER BY recorded_at_epoch_millis DESC")
     suspend fun all(): List<JournalEntryRow>
+
+    /**
+     * Every identification, in the order the changes were made. Read whole rather than filtered by
+     * a list of entry ids, because a journal can outgrow SQLite's limit on bound parameters.
+     */
+    @Query("SELECT * FROM identification_change ORDER BY rowId ASC")
+    suspend fun allChanges(): List<IdentificationChangeRow>
+
+    @Query("SELECT * FROM journal_entry WHERE id = :id")
+    suspend fun entry(id: String): JournalEntryRow?
+
+    @Query("SELECT * FROM identification_change WHERE entry_id = :entryId ORDER BY rowId ASC")
+    suspend fun changesFor(entryId: String): List<IdentificationChangeRow>
+
+    @Insert
+    suspend fun insertChange(row: IdentificationChangeRow)
+
+    /**
+     * Adds one identification to an existing entry, leaving the earlier ones as they are. Returns
+     * false, writing nothing, when there is no such entry.
+     */
+    @Transaction
+    suspend fun appendChange(row: IdentificationChangeRow): Boolean {
+        if (entry(row.entryId) == null) return false
+        insertChange(row)
+        return true
+    }
 
     @Query("SELECT COUNT(*) FROM journal_entry")
     suspend fun count(): Int
