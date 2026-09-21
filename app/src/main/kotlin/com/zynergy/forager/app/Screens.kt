@@ -77,6 +77,7 @@ import com.zynergy.forager.presentation.locationLabel
 import com.zynergy.forager.presentation.Notice
 import com.zynergy.forager.presentation.PlanTimingUiState
 import com.zynergy.forager.presentation.SeasonalityUiState
+import com.zynergy.forager.presentation.SightingChanceUiState
 import com.zynergy.forager.presentation.SpeciesSearchUiState
 import com.zynergy.forager.presentation.TripPlannerUiState
 import com.zynergy.forager.presentation.IdentificationForm
@@ -659,6 +660,7 @@ fun MapScreen(
     val located = journal.entries.filter { it.isMappable }
     var season by remember { mutableStateOf(SeasonalityUiState()) }
     var conditions by remember { mutableStateOf(ConditionsUiState()) }
+    var sightingChance by remember { mutableStateOf(SightingChanceUiState()) }
     var loading by remember { mutableStateOf(false) }
     val charted = draft.charted
 
@@ -732,6 +734,9 @@ fun MapScreen(
                         conditions = container.conditionsPresenter.load(
                             draft.criteria, charted, draft.criteria.date,
                         )
+                        sightingChance = container.sightingChancePresenter.load(
+                            charted, draft.criteria.area, draft.criteria.date,
+                        )
                         loading = false
                     }
                 },
@@ -744,6 +749,7 @@ fun MapScreen(
                 SeasonalityChart(it, draft.criteria.month, modifier = Modifier.padding(vertical = 8.dp))
             }
             ConditionsPanel(conditions)
+            SightingChancePanel(sightingChance)
         }
     }
 }
@@ -779,6 +785,39 @@ private fun ConditionsPanel(state: ConditionsUiState) {
         state.soil?.let { NoticeLine(it, tag = "soil-notice") }
         state.terrain?.let { NoticeLine(it, tag = "terrain-notice") }
         state.fruitingLag?.let { NoticeLine(it, tag = "lag-notice") }
+    }
+}
+
+/**
+ * The forecast's sighting chance for the area, or the reason there is none.
+ *
+ * The number is never shown without its reference class: the two are separate fields in the state
+ * and drawn together here. Today every load ends in "Not available", because nothing is published;
+ * the panel names that gap instead of hiding the feature.
+ */
+@Composable
+private fun SightingChancePanel(state: SightingChanceUiState) {
+    if (state.line == null && state.notice == null) return
+    Column(modifier = Modifier.padding(vertical = 8.dp).testTag("sighting-chance-panel")) {
+        Text(
+            "Sighting chance",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        state.line?.let {
+            Text(it, modifier = Modifier.padding(horizontal = 16.dp).testTag("sighting-chance-line"))
+        }
+        state.referenceClass?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp).testTag("sighting-chance-reference"),
+            )
+        }
+        state.dates?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+        state.notice?.let { NoticeLine(it, tag = "sighting-chance-notice") }
     }
 }
 
