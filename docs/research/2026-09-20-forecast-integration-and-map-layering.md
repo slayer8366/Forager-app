@@ -304,3 +304,10 @@ until something is published, and the plan says so rather than faking a fixture 
   time, unverified now.
 - Any North American mushroom forecast product. None found; every product above is European.
 - What onX and Fishbrain actually draw for their forecasts. Their pages refused the fetch.
+
+## Correction, 2026-09-20
+
+This document cites D54 for the Copernicus attribution ruling. That number came from an
+uncommitted working tree. On forager-forecast `origin/main` at `82f28b6` the attribution ruling is
+**D53**, and D54 is the weather-product ruling. The lines above are left as written; read D54 as
+D53 wherever it refers to attribution.

@@ -93,3 +93,10 @@ a target that is itself the genus.
   both. The app cannot ship a forecast layer without this ruling.
 - **Cell block size.** 1 degree is a guess; a device check with the largest planning area the app
   allows should size it.
+
+## Correction, 2026-09-20
+
+This document cites D54 for the Copernicus attribution ruling. That number came from an
+uncommitted working tree. On forager-forecast `origin/main` at `82f28b6` the attribution ruling is
+**D53**, and D54 is the weather-product ruling. The lines above are left as written; read D54 as
+D53 wherever it refers to attribution.
