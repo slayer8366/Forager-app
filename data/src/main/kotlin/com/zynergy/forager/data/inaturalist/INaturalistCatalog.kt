@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets
 class INaturalistCatalog(
     private val http: HttpTransport,
     private val baseUrl: String = DEFAULT_BASE_URL,
+    private val rootTaxonId: Long = FUNGI_TAXON_ID,
 ) : SpeciesCatalog {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -49,6 +50,7 @@ class INaturalistCatalog(
             append("?swlat=${area.south}&swlng=${area.west}")
             append("&nelat=${area.north}&nelng=${area.east}")
             append("&per_page=$perPage")
+            append("&taxon_id=$rootTaxonId")
         }
         return fetch(url) { body ->
             val envelope = json.decodeFromString<SpeciesCountsEnvelope>(body)
@@ -101,6 +103,16 @@ class INaturalistCatalog(
 
         /** This app's ceiling. The API allows 200. */
         const val MAX_PER_PAGE = 50
+
+        /**
+         * iNaturalist's taxon id for kingdom Fungi.
+         *
+         * Area suggestions are scoped to this by default. Unscoped, the endpoint answers with
+         * whatever is most observed in the box, which on real data meant mallards, crows and a sea
+         * star -- true, and useless to a forager. Constructor-injected rather than hard-coded so
+         * widening the app beyond fungi is a call-site change and not an edit here.
+         */
+        const val FUNGI_TAXON_ID = 47170L
     }
 }
 

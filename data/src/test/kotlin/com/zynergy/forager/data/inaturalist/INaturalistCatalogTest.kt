@@ -58,6 +58,25 @@ class SearchRequestTest {
     }
 
     @Test
+    fun `area suggestions are scoped to fungi, not to whatever is most observed`() = runTest {
+        val http = FakeHttp()
+        INaturalistCatalog(http, "https://example.test/v1").recordedIn(PUGET, 10)
+
+        assertTrue(
+            http.lastUrl!!.contains("taxon_id=${INaturalistCatalog.FUNGI_TAXON_ID}"),
+            "unscoped, this endpoint returns birds and trees: ${http.lastUrl}",
+        )
+    }
+
+    @Test
+    fun `the root taxon can be widened at the call site`() = runTest {
+        val http = FakeHttp()
+        INaturalistCatalog(http, "https://example.test/v1", rootTaxonId = 47126L).recordedIn(PUGET, 10)
+
+        assertTrue(http.lastUrl!!.contains("taxon_id=47126"), http.lastUrl!!)
+    }
+
+    @Test
     fun `the bounding box becomes the four corner parameters`() = runTest {
         val http = FakeHttp()
         INaturalistCatalog(http, "https://example.test/v1").recordedIn(PUGET, 10)
