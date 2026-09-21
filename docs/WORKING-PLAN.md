@@ -304,6 +304,63 @@ GB. From now on, APKs are built first, Gradle is stopped, and only then does the
 emulator start. The debug APK is 59.7 MB, because MapLibre ships native code for
 four CPU types. Splitting by architecture is a release task.
 
+## D online: done, checked on the emulator 2026-09-20
+
+The Map tab is MapLibre 13.6.1 drawing OSM raster tiles. The planning area,
+accuracy rings and entry markers are GeoJSON layers built by `MapOverlayBuilder`.
+
+**Seen on the device:**
+- **Tiles and attribution.** The OSM tiles load, and the attribution is always
+  visible on the map.
+- **Area shape.** The planning area now draws taller than wide. That is correct:
+  0.9 degrees of longitude at 47 N covers about two-thirds of the ground 0.9 degrees
+  of latitude does. The old plot hid that.
+- **Markers.** A real 5 m fix at 47.45 N, 122.4 W is a solid marker in the right place.
+- **Taps and double-taps.** A tap re-centres the area. A true double-tap zooms
+  without moving it. An earlier "double-tap moved the area" came from taps sent too
+  slowly to count as a double, and a single fast pair did not move it.
+- **Drag on the map.** On a page long enough to scroll, a drag that starts on the
+  map pans the map: 40% of its pixels changed and the header none. The page and the
+  area stay put. The control drag, started below the map, scrolled the page, so the
+  check could see scrolling.
+- **The HTTP hook is in MapLibre's path.** The app's tile-health log line, which
+  only the app's own client can write, fired on real OSM responses. The User-Agent
+  is known to be on those requests from the code, not from seeing it on the wire:
+  the requests are HTTPS.
+- **Server unreachable.** With a proxy pointed at a closed port, the map says "Map
+  tiles are not loading: no connection to the map server."
+- **Offline.** Airplane mode says "No connection. The map shows only areas already
+  loaded; your journal still saves." The notice clears when the network returns.
+
+**Two bugs found on the way:**
+1. **Offline showed nothing.** MapLibre stops requesting tiles when it thinks the
+   device is offline, so the tile watcher had nothing to see. Network state now comes
+   from ConnectivityManager.
+2. **The first version of that stayed "online" in airplane mode.** It asked the
+   manager for the active network from inside `onLost`. The state now comes from
+   each callback's own arguments, and the device log shows `lost -> online=false`
+   arriving.
+
+**Not checked:** an actual OSM refusal (403, 418 or 429). The wording for it is
+tested, but no refusal can be produced on demand. The User-Agent header was not
+observed on the wire.
+
+**Test runs with the emulator up** now use APKs built beforehand and
+`adb shell am instrument`, so Gradle and the emulator never run at the same time.
+
+## D offline: next
+
+Through the existing Cloudflare worker, using MapLibre's offline regions. The old
+app's lessons that apply:
+- A style with glyph layers crashes the offline download natively.
+- An `asset://` style URL hangs the download at 0/1.
+- The map must be rendered from the same style URL it was downloaded against.
+- MapLibre's database defaults to the cache directory, which the OS or "Clear
+  cache" can wipe.
+- A 404 tile counts as success.
+- The extract covers the continental US to zoom 15. That was checked against the
+  worker's metadata and real tiles, and it corrects the old README's "zoom 14".
+
 ## Superseded: D before the decision
 
 Crossing 3 above decided where tiles live. What it did not decide is **whose tiles**,
