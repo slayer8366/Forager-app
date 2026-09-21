@@ -28,7 +28,11 @@ private val TURKEY_TAIL = Species("48435", "Trametes versicolor", "turkey-tail",
 
 private class ListStore(var failReads: Boolean = false) : TripPlanStore {
     val plans = mutableListOf<TripPlan>()
-    override suspend fun save(plan: TripPlan): Outcome<TripPlan> { plans += plan; return Outcome.Ok(plan) }
+    override suspend fun save(plan: TripPlan): Outcome<TripPlan> {
+        plans.removeAll { it.id == plan.id }
+        plans += plan
+        return Outcome.Ok(plan)
+    }
     override suspend fun upcoming(from: LocalDate): Outcome<List<TripPlan>> =
         if (failReads) Outcome.Failed("disk unreadable") else Outcome.Ok(plans.filter { !it.date.isBefore(from) })
 }
