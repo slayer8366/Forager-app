@@ -582,3 +582,33 @@ masked cells undrawn, tap for the number with its reference class, uncertainty, 
 Offline needs a per-area form of the vector companion, which is a forecast-repo decision. Six
 owner decisions are listed in the document's section 7; F0 (the artifact contract) and F1 (an
 honest "no forecast published yet" source) can start before the model exists.
+
+## Ruling 2026-09-20: the forecast plan's six decisions
+
+**The owner's words:** "I'll take your recommendations." Applied to section 7 of
+`docs/research/2026-09-20-forecast-integration-and-map-layering.md`:
+1. Percent and band together, with the reference class in the same sentence.
+2. Weather cell is the finest unit shown in phase 1; the 250 m raster is a later, online-only,
+   no-percent layer.
+3. The artifact contract is drafted for the forecast repo at
+   `docs/research/2026-09-20-forecast-artifact-contract-proposal.md`. It becomes a decision only
+   when a row in that repo says so; this app's sessions do not write there.
+4. The Map tab moves to a layers sheet (F4), which relocates the offline style modes. Not built yet.
+5. Commercial use: no recommendation was made, so nothing is ruled. Still open, and it gates the
+   forecast layer.
+6. While nothing is published, the forecast is a visible, named gap, not a hidden feature.
+
+**F1 built** (same day): `ForecastSource` port and the `CellSightingChance` /
+`AreaSightingChance` types from the forecast's R1, `UnavailableForecastSource` answering
+"none is published yet for any area", `SightingChancePresenter` showing the range across scored
+cells (never an average) beside a fixed reference-class sentence, and a "Sighting chance" panel
+under the Map tab's conditions. `FORBIDDEN_FORECAST_TERMS` plus a test apply the forecast's R8
+to this app's copy. Presentation 56 (was 50); domain 99 and data 50 unchanged. Revert-checked:
+putting "fruiting probability" into the reference class failed only the terms test, quoting the
+string; counting masked cells as scored failed the two range tests with "12% to 90% across 3
+cells" and "40% across 1 cell". No compile errors in either reverted build; forward lines
+confirmed restored. Not device-checked: the panel only ever shows the "Not available" notice
+today, and its wiring is the same `ConditionsPanel` path checked on 2026-09-20.
+
+**Next:** F0 needs the owner in the forecast repo. F2 (the layer model against a fixture in the
+contract's shape) waits on F0.

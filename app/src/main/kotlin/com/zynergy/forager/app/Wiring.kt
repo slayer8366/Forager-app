@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import com.zynergy.forager.data.inaturalist.INaturalistCatalog
 import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
+import com.zynergy.forager.data.forecast.UnavailableForecastSource
 import com.zynergy.forager.data.openmeteo.OpenMeteoWeatherSource
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.port.Clock
@@ -24,6 +25,7 @@ import com.zynergy.forager.persistence.ForagerStores
 import com.zynergy.forager.presentation.ConditionsPresenter
 import com.zynergy.forager.presentation.PlanTimingPresenter
 import com.zynergy.forager.presentation.SeasonalityPresenter
+import com.zynergy.forager.presentation.SightingChancePresenter
 import com.zynergy.forager.presentation.TripPlannerPresenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -85,6 +87,7 @@ class AppContainer(context: Context) {
     val offlineMaps = OfflineMaps(MapLibreOfflineRegionStore(context), appScope)
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
     private val terrain = UnavailableTerrainSource()
+    private val forecast = UnavailableForecastSource()
     private val weather = OpenMeteoWeatherSource(AndroidHttpTransport())
     private val clock = SystemClock()
     private val ids = UuidIdSource()
@@ -105,4 +108,5 @@ class AppContainer(context: Context) {
     val timingPresenter = PlanTimingPresenter(AssessPlanTiming(catalog))
     val seasonalityPresenter = SeasonalityPresenter(catalog)
     val conditionsPresenter = ConditionsPresenter(terrain, weather)
+    val sightingChancePresenter = SightingChancePresenter(forecast)
 }
