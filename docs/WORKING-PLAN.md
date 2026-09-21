@@ -238,7 +238,8 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   means deciding whether a plan is edited in place or copied. That is a small design
   decision, recorded here rather than guessed.
 
-- **Researched 2026-09-20, awaiting the owner's decision:** see
+- **Approved 2026-09-20 ("the plan has my go ahead"); handed off in
+  `docs/handoffs/2026-09-20-species-identification-and-plan-editing.md`.** Research:
   `docs/research/2026-09-20-species-entry-and-plan-editing.md`. It covers this item
   and editing saved plans.
 - **Open: journal entries cannot carry a species.** The only save path, the quick
