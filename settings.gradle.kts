@@ -11,3 +11,4 @@ dependencyResolutionManagement {
 rootProject.name = "forager-app"
 include(":domain")
 include(":data")
+include(":presentation")
