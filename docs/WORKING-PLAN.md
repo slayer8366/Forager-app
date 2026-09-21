@@ -542,3 +542,32 @@ exactly one test, the targeted one:
 
 **Not checked:** rotation, which recreates `AppContainer` and loses the form and the edit session.
 That predates this work. Also a real device, as opposed to the emulator.
+
+## Ruling 2026-09-20: the four open items above
+
+**The owner's words:** "I'll take your recommendations on those open items". This supersedes
+the "Found on the way, not fixed" list in the section above, which stays as the record of what was
+found.
+
+- **An empty change form: now needs an explicit choice** (`46a892b`). "Save identification" is
+  disabled until a name is typed or chosen, and the status line says nothing will be saved.
+  Going back to Unidentified is its own button, "Mark as unidentified", and it appends to the
+  history. New entries are unchanged: a blank field still saves as Unidentified, the approved
+  explicit state. Revert-checked twice:
+  - Making `canSaveAsChange` always true failed the JVM test ("expected false but was true").
+  - Making the button always enabled failed the on-device test ("is not enabled").
+  Each run failed only the targeted test, and neither build had compile errors.
+- **Catalog id 47347 for Cantharellus cibarius** (`88c0e89`). Hand-written test constants and
+  canned JSON said 47348, which is the genus. `RecordedResponseTest` keeps 47348, correctly: its
+  fixture is a real response for the genus. Not checked: which taxon the recorded
+  `histogram-chanterelle-puget.json` was fetched for. Its body carries no taxon id. The
+  emulator's database still holds the session's `upgrade-check-1` row with the old label. That
+  row is test data.
+- **Unmodelled ranks read as UNKNOWN: no change.** Showing "unknown" is honest. Mapping
+  iNaturalist's extra ranks would need a decision about what each one means.
+- **Rotation loses the form and an open plan edit: a separate task.** It predates this work.
+  Fixing it means moving `AppContainer`, `JournalScreenState` and `PlanDraft` out of the
+  activity's lifetime, into a ViewModel or the Application, and that is a design change.
+
+Suites after the ruling: domain 99, data 50, presentation 50 (JUnit XML); persistence on device 18,
+app on device 8 (`am instrument`).
