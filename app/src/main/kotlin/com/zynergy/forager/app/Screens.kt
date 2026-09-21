@@ -43,6 +43,7 @@ import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.presentation.ConditionsUiState
+import com.zynergy.forager.presentation.EquirectangularProjection
 import com.zynergy.forager.presentation.Notice
 import com.zynergy.forager.presentation.PlanTimingUiState
 import com.zynergy.forager.presentation.SeasonalityUiState
@@ -242,9 +243,7 @@ fun MapScreen(
             modifier = Modifier.padding(horizontal = 16.dp).testTag("area-readout"),
         )
 
-        val view = PlanDraft.DEFAULT_AREA.let { d ->
-            boxAround(d.centre(), 1.2, 1.2)
-        }
+        val view = boxAround(PlanDraft.DEFAULT_AREA.centre(), 1.2, 1.2)
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -253,27 +252,30 @@ fun MapScreen(
                 .testTag("map-canvas")
                 .pointerInput(view) {
                     detectTapGestures { offset ->
-                        val lon = view.west + (offset.x / size.width) * (view.east - view.west)
-                        val lat = view.north - (offset.y / size.height) * (view.north - view.south)
-                        draft.centreOn(Coordinates(lat.coerceIn(-89.0, 89.0), lon.coerceIn(-179.0, 179.0)))
+                        val projection = EquirectangularProjection(
+                            view, size.width.toFloat(), size.height.toFloat(),
+                        )
+                        draft.centreOn(projection.toCoordinates(offset.x, offset.y))
                     }
                 },
         ) {
+            val projection = EquirectangularProjection(view, size.width, size.height)
             drawRect(color = Color(0xFFE7EFE7))
-            fun xOf(lon: Double) = ((lon - view.west) / (view.east - view.west)).toFloat() * size.width
-            fun yOf(lat: Double) = (1f - ((lat - view.south) / (view.north - view.south)).toFloat()) * size.height
 
+            val (topLeft, bottomRight) = projection.rectFor(area)
             drawRect(
                 color = Color(0x332E7D32),
-                topLeft = Offset(xOf(area.west), yOf(area.north)),
+                topLeft = Offset(topLeft.x, topLeft.y),
                 size = androidx.compose.ui.geometry.Size(
-                    xOf(area.east) - xOf(area.west),
-                    yOf(area.south) - yOf(area.north),
+                    bottomRight.x - topLeft.x,
+                    bottomRight.y - topLeft.y,
                 ),
             )
             located.forEach { entry ->
-                val p = entry.where ?: return@forEach
-                drawCircle(Color(0xFF1B5E20), radius = 9f, center = Offset(xOf(p.longitude), yOf(p.latitude)))
+                val at = entry.where ?: return@forEach
+                if (!projection.isVisible(at)) return@forEach
+                val point = projection.toScreen(at)
+                drawCircle(Color(0xFF1B5E20), radius = 9f, center = Offset(point.x, point.y))
             }
         }
 
