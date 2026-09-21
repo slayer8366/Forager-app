@@ -281,6 +281,15 @@ build different things:
    come from somewhere.
 Online does not depend on this choice, so it is being built first.
 
+**Answered 2026-09-20, in the owner's words:** "Connected through a cloudflare
+sever / Maplibre as the renderer". That is design 1. Assumed, not stated: this
+means the existing worker at `forager-pmtiles.brandonlee1-894.workers.dev`, since it
+is live and already serves the PMTiles extract and an offline style. The old
+app's README describes that extract as continental US, built to zoom 14. So
+offline regions outside the US, or zoomed past 14, will have no tiles. That limit
+belongs to the extract, not to this app, and it has to be shown to the user rather
+than discovered as a blank map.
+
 **Crossing 1 revisited.** MapLibre owns its own projection. The extracted
 `EquirectangularProjection` loses its callers when the Canvas map goes, and it will
 be deleted rather than kept. What carries over is the lesson: the accuracy area is
