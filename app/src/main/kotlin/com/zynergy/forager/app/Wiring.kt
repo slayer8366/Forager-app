@@ -15,6 +15,7 @@ import com.zynergy.forager.domain.usecase.PlanTrip
 import com.zynergy.forager.domain.usecase.RecordSighting
 import com.zynergy.forager.domain.usecase.SearchSpecies
 import com.zynergy.forager.domain.usecase.SuggestTargets
+import com.zynergy.forager.domain.usecase.UpcomingPlans
 import com.zynergy.forager.presentation.SpeciesSearchPresenter
 import com.zynergy.forager.persistence.ForagerStores
 import com.zynergy.forager.presentation.ConditionsPresenter
@@ -89,7 +90,11 @@ class AppContainer(context: Context) {
 
     val recordSighting = RecordSighting(journalStore, clock, ids)
     val searchPresenter = SpeciesSearchPresenter(SearchSpecies(catalog))
-    val plannerPresenter = TripPlannerPresenter(SuggestTargets(catalog), PlanTrip(planStore, clock, ids))
+    val plannerPresenter = TripPlannerPresenter(
+        SuggestTargets(catalog),
+        PlanTrip(planStore, clock, ids),
+        UpcomingPlans(planStore, clock),
+    )
     val timingPresenter = PlanTimingPresenter(AssessPlanTiming(catalog))
     val seasonalityPresenter = SeasonalityPresenter(catalog)
     val conditionsPresenter = ConditionsPresenter(terrain, weather)

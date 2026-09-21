@@ -216,6 +216,28 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   followed. The emulator now starts headless with a 1.5 GB limit. Work is pushed
   before each device run, because this machine has shown it can lose both at once.
 
+- **A correction to the entry for B above.** B's entry and commit `58565bf`
+  describe persistence as covering the journal and plans. For plans that was true
+  only in tests. A caller search on 2026-09-20 found that neither saving a plan nor
+  reading one back had a production caller. The presenter's save existed and nothing
+  called it. The read path did not exist. The tables, the Room store and the
+  transaction that the positive control broke were all reachable only from tests.
+  The same search turned up a larger gap: nothing in the UI could set a trip's name
+  or date, so every plan was dated today. "Check my timing" could only ever judge the
+  current month, and no plan could pass the name rule to be saved at all. B's entry
+  stands as written above, and this note supersedes it on that point.
+- **Plans are now reachable end to end.** The Plan tab has a name field, the standard
+  Material date picker with past days disabled, a Save button, and a list of saved
+  upcoming plans. The picker's past-day block is a convenience only; PlanTrip still
+  refuses a past date. Checked on the emulator. Saving with no name is refused as
+  "Not saved: a plan needs a name". September 19 was disabled on the 20th. Picking
+  the 27th stored the 27th, and the plan was still listed after the process was
+  killed.
+- **Deliberately not done: opening or editing a saved plan.** PlanTrip mints a new id
+  on every save, so "open, change, save" would create a duplicate. Doing it properly
+  means deciding whether a plan is edited in place or copied. That is a small design
+  decision, recorded here rather than guessed.
+
 ## D, the basemap, needs a decision before code
 
 Crossing 3 above decided where tiles live. What it did not decide is **whose tiles**,

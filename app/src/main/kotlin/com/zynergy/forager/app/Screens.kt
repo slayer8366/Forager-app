@@ -1,6 +1,16 @@
 package com.zynergy.forager.app
 
 import android.Manifest
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import com.zynergy.forager.presentation.SavedPlansUiState
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -140,10 +150,10 @@ class JournalScreenState(private val container: AppContainer) {
 }
 
 @Composable
-private fun NoticeLine(notice: Notice, tag: String = "notice") {
+private fun NoticeLine(notice: Notice, tag: String = "notice", problemTitle: String = "Could not load") {
     val (prefix, detail, colour) = when (notice) {
         is Notice.Incomplete -> Triple("Showing some of the matches", notice.detail, Color(0xFF8A6D00))
-        is Notice.Problem -> Triple("Could not load", notice.detail, Color(0xFFB3261E))
+        is Notice.Problem -> Triple(problemTitle, notice.detail, Color(0xFFB3261E))
         is Notice.NotAvailable -> Triple("Not available", notice.capability, Color(0xFF49454F))
     }
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag(tag)) {
@@ -539,6 +549,19 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
     var timing by remember { mutableStateOf(PlanTimingUiState()) }
     var suggestions by remember { mutableStateOf(TripPlannerUiState()) }
     var busy by remember { mutableStateOf(false) }
+    var saveResult by remember { mutableStateOf(TripPlannerUiState()) }
+    var savedPlans by remember { mutableStateOf(SavedPlansUiState()) }
+    var pickingDate by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { savedPlans = container.plannerPresenter.upcoming() }
+
+    if (pickingDate) {
+        TripDatePicker(
+            current = criteria.date,
+            onPicked = { draft.setDate(it); pickingDate = false },
+            onDismiss = { pickingDate = false },
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("plan-screen")) {
         Text("Plan a trip", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
@@ -553,6 +576,18 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
+
+        OutlinedTextField(
+            value = criteria.name,
+            onValueChange = draft::setName,
+            label = { Text("Trip name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("plan-name"),
+        )
+        OutlinedButton(
+            onClick = { pickingDate = true },
+            modifier = Modifier.padding(horizontal = 16.dp).testTag("plan-date"),
+        ) { Text("Trip date: ${criteria.date}") }
 
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
@@ -576,6 +611,29 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
                 modifier = Modifier.testTag("suggest-button"),
             ) { Text("What is here?") }
         }
+
+        Button(
+            onClick = {
+                scope.launch {
+                    busy = true
+                    saveResult = container.plannerPresenter.save(
+                        criteria.name, criteria.date, criteria.area, criteria.targets,
+                    )
+                    if (saveResult.saved != null) savedPlans = container.plannerPresenter.upcoming()
+                    busy = false
+                }
+            },
+            modifier = Modifier.padding(horizontal = 16.dp).testTag("save-plan"),
+        ) { Text("Save plan") }
+        saveResult.saved?.let {
+            Text(
+                "Saved \u201c${it.name}\u201d for ${it.date}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF2E7D32),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("plan-saved"),
+            )
+        }
+        saveResult.notice?.let { NoticeLine(it, tag = "save-notice", problemTitle = "Not saved") }
 
         if (busy) CircularProgressIndicator(modifier = Modifier.padding(16.dp).testTag("plan-busy"))
         timing.notice?.let { NoticeLine(it, tag = "timing-notice") }
@@ -629,5 +687,74 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
                     .clickable { draft.addTarget(s) },
             ) { Text(s.displayName, modifier = Modifier.padding(12.dp)) }
         }
+
+        Text(
+            "Saved plans",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+        )
+        savedPlans.notice?.let { NoticeLine(it, tag = "saved-plans-notice") }
+        if (savedPlans.plans.isEmpty() && savedPlans.notice == null) {
+            Text(
+                "No upcoming plans saved.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp).testTag("no-saved-plans"),
+            )
+        }
+        savedPlans.plans.forEach { plan ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .testTag("saved-plan-${plan.id}"),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(plan.name, fontWeight = FontWeight.Medium)
+                    Text(
+                        "${plan.date} · ${plan.targets.size} target${if (plan.targets.size == 1) "" else "s"}" +
+                            if (plan.targets.isEmpty()) "" else ": " + plan.targets.joinToString { it.displayName },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
+}
+
+/**
+ * The platform's standard date picker, with past days disabled.
+ *
+ * Past days are disabled here only as a convenience: PlanTrip is what refuses a past date, so the
+ * rule holds even if this picker is bypassed. Dates cross the picker boundary as UTC midnight,
+ * which is how Material's picker encodes them; converting through the device zone instead shifts
+ * the chosen day by one for anyone west of Greenwich.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TripDatePicker(current: LocalDate, onPicked: (LocalDate) -> Unit, onDismiss: () -> Unit) {
+    val today = LocalDate.now()
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = current.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                !Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate().isBefore(today)
+
+            override fun isSelectableYear(year: Int): Boolean = year >= today.year
+        },
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    state.selectedDateMillis
+                        ?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                        ?.let(onPicked) ?: onDismiss()
+                },
+                modifier = Modifier.testTag("date-ok"),
+            ) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    ) { DatePicker(state = state) }
 }

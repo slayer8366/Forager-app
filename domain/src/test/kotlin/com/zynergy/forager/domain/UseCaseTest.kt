@@ -1,6 +1,7 @@
 package com.zynergy.forager.domain
 
 import com.zynergy.forager.domain.usecase.PlanTrip
+import com.zynergy.forager.domain.usecase.UpcomingPlans
 import com.zynergy.forager.domain.usecase.RecordSighting
 import com.zynergy.forager.domain.usecase.SearchSpecies
 import com.zynergy.forager.domain.usecase.SuggestTargets
@@ -176,5 +177,27 @@ class SuggestTargetsTest {
         val catalog = FakeCatalog()
         SuggestTargets(catalog)(PUGET_SOUND, limit = 10_000)
         assertEquals(SuggestTargets.MAX_SUGGESTIONS, catalog.lastLimit)
+    }
+}
+
+class UpcomingPlansTest {
+
+    private val today = java.time.LocalDate.of(2026, 9, 20)
+    private val clock = FixedClock(java.time.Instant.parse("2026-09-20T12:00:00Z"), today)
+
+    private fun plan(id: String, date: java.time.LocalDate) =
+        TripPlan(id, "trip $id", date, PUGET_SOUND, emptyList())
+
+    @Test
+    fun `plans dated today count as upcoming and past ones do not`() = runTest {
+        val store = FakeTripPlanStore().apply {
+            save(plan("yesterday", today.minusDays(1)))
+            save(plan("today", today))
+            save(plan("next-week", today.plusDays(7)))
+        }
+
+        val ok = assertIs<Outcome.Ok<List<TripPlan>>>(UpcomingPlans(store, clock)())
+
+        assertEquals(setOf("today", "next-week"), ok.value.map { it.id }.toSet())
     }
 }
