@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
     implementation(project(":presentation"))
+    implementation(project(":persistence"))
     implementation(libs.coroutines.core)
 
     implementation(platform(libs.compose.bom))

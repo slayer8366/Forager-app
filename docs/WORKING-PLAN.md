@@ -164,4 +164,24 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   random point within about 33 km of a fixed spot, then rendered as "Located" and drawn
   on the map. That is a made-up value someone could act on. Entries now save with no
   location and the screen says why. The map honestly reports zero located entries.
-- **B next.** Room, with the versions above and the compatibility caveat.
+- **B done.** Room persistence, wired in, 130 tests. Two build problems on the way,
+  both worth knowing about because neither was a Room problem:
+  - **Metaspace OOM in the KSP worker.** Gradle's default metaspace is too small for
+    KSP's analysis worker on this machine. Fixed by stating the JVM args in
+    `gradle.properties` rather than inheriting whatever the JDK defaults to. This is
+    also, almost certainly, what produced the 593 MB heap dump found in the working
+    tree earlier in the project.
+  - **AGP 9's built-in Kotlin is 2.2.10, not 2.4.20.** The JVM modules compile at
+    2.4.20 and emit metadata 2.2.10 cannot read. `:app` escaped this only because the
+    Compose plugin happens to drag the Kotlin plugin up to 2.4.20 with it, which is
+    luck, not design. `:persistence` had nothing doing that and failed. Fixed by
+    declaring every plugin in the root build with `apply false` so all modules resolve
+    one classpath. **That answers the question the research could not:** KSP 2.3.12
+    does work with Kotlin 2.4.20 and AGP 9.4.1, shown by a build rather than by a
+    compatibility table, once the version is actually unified.
+
+  Crossing 2 is now live and unchanged: the schema stores a plain latitude and
+  longitude at version 1, `persistence/schemas/...1.json` is committed, and the
+  accuracy column becomes version 2 in the same change as the code that reads it.
+
+- **C next.** Device location, which brings migration 1 to 2.

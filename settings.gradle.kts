@@ -16,4 +16,5 @@ rootProject.name = "forager-app"
 include(":domain")
 include(":data")
 include(":presentation")
+include(":persistence")
 include(":app")

@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,33 @@ import kotlinx.coroutines.launch
 class JournalScreenState(private val container: AppContainer) {
     val entries = mutableStateListOf<JournalEntry>()
 
+    /** Set when the journal could not be read, so the screen can say so instead of looking empty. */
+    var loadFailure by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Loads what is already saved.
+     *
+     * Without this the screen would start empty on every launch while the database quietly held
+     * the entries, which looks exactly like data loss and would have shipped as one.
+     */
+    suspend fun load() {
+        when (val outcome = container.journalStore.all()) {
+            is Outcome.Ok -> {
+                entries.clear()
+                entries.addAll(outcome.value)
+                loadFailure = null
+            }
+            is Outcome.Partial -> {
+                entries.clear()
+                entries.addAll(outcome.value)
+                loadFailure = outcome.note
+            }
+            is Outcome.Failed -> loadFailure = outcome.reason
+            is Outcome.Unsupported -> loadFailure = outcome.capability
+        }
+    }
+
     suspend fun addQuickNote(note: String, where: Coordinates?) {
         when (val outcome = container.recordSighting(species = null, notes = note, where = where)) {
             is Outcome.Ok -> entries.add(0, outcome.value)
@@ -81,6 +109,8 @@ private fun NoticeLine(notice: Notice, tag: String = "notice") {
 fun JournalScreen(state: JournalScreenState) {
     val scope = rememberCoroutineScope()
     var note by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(Unit) { state.load() }
 
     Column(modifier = Modifier.fillMaxSize().testTag("journal-screen")) {
         Text("Journal", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
@@ -114,7 +144,10 @@ fun JournalScreen(state: JournalScreenState) {
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("no-location-note"),
         )
-        if (state.entries.isEmpty()) {
+        state.loadFailure?.let {
+            NoticeLine(Notice.Problem(it), tag = "journal-load-failure")
+        }
+        if (state.entries.isEmpty() && state.loadFailure == null) {
             Text(
                 "No entries yet. An unnamed find is still worth recording.",
                 modifier = Modifier.padding(16.dp).testTag("journal-empty"),

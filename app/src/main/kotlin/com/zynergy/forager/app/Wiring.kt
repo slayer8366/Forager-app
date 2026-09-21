@@ -2,22 +2,20 @@ package com.zynergy.forager.app
 
 import com.zynergy.forager.data.inaturalist.HttpResponse
 import com.zynergy.forager.data.inaturalist.HttpTransport
+import android.content.Context
 import com.zynergy.forager.data.inaturalist.INaturalistCatalog
 import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
 import com.zynergy.forager.data.openmeteo.OpenMeteoWeatherSource
-import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
-import com.zynergy.forager.domain.TripPlan
 import com.zynergy.forager.domain.port.Clock
 import com.zynergy.forager.domain.port.IdSource
-import com.zynergy.forager.domain.port.JournalStore
-import com.zynergy.forager.domain.port.TripPlanStore
 import com.zynergy.forager.domain.usecase.AssessPlanTiming
 import com.zynergy.forager.domain.usecase.PlanTrip
 import com.zynergy.forager.domain.usecase.RecordSighting
 import com.zynergy.forager.domain.usecase.SearchSpecies
 import com.zynergy.forager.domain.usecase.SuggestTargets
 import com.zynergy.forager.presentation.SpeciesSearchPresenter
+import com.zynergy.forager.persistence.ForagerStores
 import com.zynergy.forager.presentation.ConditionsPresenter
 import com.zynergy.forager.presentation.PlanTimingPresenter
 import com.zynergy.forager.presentation.SeasonalityPresenter
@@ -29,7 +27,6 @@ import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
-import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * HTTP over the platform's own client, behind the transport interface the data module owns.
@@ -65,30 +62,6 @@ class AndroidHttpTransport : HttpTransport {
     }
 }
 
-/**
- * In-memory stores. Deliberately named so nobody mistakes this for persistence: everything here is
- * lost when the process dies. Room comes in a later increment; shipping a fake that looked durable
- * would be worse than one that says what it is.
- */
-class InMemoryJournalStore : JournalStore {
-    private val entries = ConcurrentLinkedQueue<JournalEntry>()
-    override suspend fun save(entry: JournalEntry): Outcome<JournalEntry> {
-        entries += entry
-        return Outcome.Ok(entry)
-    }
-    override suspend fun all(): Outcome<List<JournalEntry>> = Outcome.Ok(entries.toList())
-}
-
-class InMemoryTripPlanStore : TripPlanStore {
-    private val plans = ConcurrentLinkedQueue<TripPlan>()
-    override suspend fun save(plan: TripPlan): Outcome<TripPlan> {
-        plans += plan
-        return Outcome.Ok(plan)
-    }
-    override suspend fun upcoming(from: LocalDate): Outcome<List<TripPlan>> =
-        Outcome.Ok(plans.filter { !it.date.isBefore(from) }.sortedBy { it.date })
-}
-
 class SystemClock : Clock {
     override fun now(): Instant = Instant.now()
     override fun today(): LocalDate = LocalDate.now()
@@ -99,15 +72,16 @@ class UuidIdSource : IdSource {
 }
 
 /** One place the graph is assembled, so no screen constructs its own dependencies. */
-class AppContainer {
+class AppContainer(context: Context) {
+    private val stores = ForagerStores.open(context)
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
     private val terrain = UnavailableTerrainSource()
     private val weather = OpenMeteoWeatherSource(AndroidHttpTransport())
     private val clock = SystemClock()
     private val ids = UuidIdSource()
 
-    val journalStore = InMemoryJournalStore()
-    private val planStore = InMemoryTripPlanStore()
+    val journalStore = stores.journal
+    private val planStore = stores.plans
 
     val today: LocalDate get() = clock.today()
 
