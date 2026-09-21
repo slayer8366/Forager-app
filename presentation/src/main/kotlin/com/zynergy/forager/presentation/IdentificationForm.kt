@@ -33,6 +33,20 @@ data class IdentificationForm(
     val identification: Identification
         get() = chosen ?: if (text.isBlank()) Identification.Unidentified else Identification.Unconfirmed(text)
 
+    /**
+     * Whether saving this form as a *change* to an existing entry is allowed.
+     *
+     * An empty form is not a change. On a new entry, a blank field saves as Unidentified, which is
+     * the approved explicit state; on an existing entry, the same blank field would replace a name
+     * with Unidentified on one tap of Save. Moving an entry back to Unidentified is kept, as its own
+     * explicit action, because "I no longer think it is that" is a real change of mind.
+     */
+    val canSaveAsChange: Boolean get() = chosen != null || text.isNotBlank()
+
+    /** The status line for changing an existing entry, where an empty form saves nothing. */
+    val changeStatus: String
+        get() = if (canSaveAsChange) status else "Type or choose a name. Nothing is saved until you do."
+
     /** One line telling the forager what will be saved, before they save it. */
     val status: String
         get() = when (val id = identification) {

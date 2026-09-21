@@ -80,6 +80,26 @@ class IdentificationFormTest {
     }
 }
 
+class ChangeIdentificationFormTest {
+
+    @Test
+    fun `an empty form cannot be saved as a change, and says so`() {
+        assertEquals(false, IdentificationForm().canSaveAsChange)
+        assertEquals(false, IdentificationForm().typed("  ").canSaveAsChange)
+        assertEquals("Type or choose a name. Nothing is saved until you do.", IdentificationForm().changeStatus)
+    }
+
+    @Test
+    fun `a typed name or a chosen taxon can be saved as a change`() {
+        assertEquals(true, IdentificationForm().typed("chanterelle?").canSaveAsChange)
+        assertEquals(true, IdentificationForm().choose(CHANTERELLE, TaxonSource.SEARCH).canSaveAsChange)
+        assertEquals(
+            "Will be saved as Golden Chanterelle, chosen from search.",
+            IdentificationForm().choose(CHANTERELLE, TaxonSource.SEARCH).changeStatus,
+        )
+    }
+}
+
 class IdentificationSuggestionsTest {
 
     private fun entryOf(id: String, species: Species?) = JournalEntry.first(
