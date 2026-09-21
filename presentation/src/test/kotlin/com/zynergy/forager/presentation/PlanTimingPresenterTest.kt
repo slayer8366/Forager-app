@@ -20,7 +20,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val AREA = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
-private val CHANT = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANT = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 private val OCTOBER_12 = LocalDate.of(2026, 10, 12)
 
 private fun year(peak: Month, count: Int) = Month.entries.associateWith { if (it == peak) count else 0 }

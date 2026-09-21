@@ -41,7 +41,7 @@ class MigrationTest {
                   (id, recorded_at_epoch_millis, species_catalog_id, species_scientific_name,
                    species_common_name, species_rank, notes, latitude, longitude, photo_count)
                 VALUES
-                  ('old-entry', 1758369600000, '47348', 'Cantharellus cibarius',
+                  ('old-entry', 1758369600000, '47347', 'Cantharellus cibarius',
                    'Golden Chanterelle', 'SPECIES', 'found before the update', 47.5, -122.5, 2)
                 """.trimIndent(),
             )
@@ -124,7 +124,7 @@ class MigrationTest {
                    species_common_name, species_rank, notes, latitude, longitude,
                    location_accuracy_metres, photo_count)
                 VALUES
-                  ('chanterelle', 1758369600000, '47348', 'Cantharellus cibarius',
+                  ('chanterelle', 1758369600000, '47347', 'Cantharellus cibarius',
                    'Golden Chanterelle', 'SPECIES', 'under douglas fir', 47.5, -122.5, 6.0, 2),
                   ('genus', 1758373200000, '47578', 'Russula', NULL, 'GENUS', '', NULL, NULL, NULL, 0),
                   ('unnamed', 1758376800000, NULL, NULL, NULL, NULL, 'orange bracket', NULL, NULL, NULL, 0),
@@ -151,7 +151,7 @@ class MigrationTest {
             assertEquals(
                 "exactly one history row per entry, with the version 2 values copied as they were",
                 listOf(
-                    listOf("chanterelle", "TAXON", "NOT_RECORDED", "47348", "Cantharellus cibarius",
+                    listOf("chanterelle", "TAXON", "NOT_RECORDED", "47347", "Cantharellus cibarius",
                         "Golden Chanterelle", "SPECIES", null, "1758369600000"),
                     listOf("genus", "TAXON", "NOT_RECORDED", "47578", "Russula", null, "GENUS", null,
                         "1758373200000"),
@@ -174,7 +174,7 @@ class MigrationTest {
         val entries = (read as Outcome.Ok).value.associateBy { it.id }
         assertEquals(
             Identification.Taxon(
-                Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES),
+                Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES),
                 TaxonSource.NOT_RECORDED,
             ),
             entries.getValue("chanterelle").identification,
