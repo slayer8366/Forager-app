@@ -106,7 +106,7 @@ fun entryOf(
 fun species(id: String, scientific: String, common: String? = null) =
     Species(id, scientific, common, TaxonRank.SPECIES)
 
-val CHANTERELLE = species("47348", "Cantharellus cibarius", "Golden Chanterelle")
+val CHANTERELLE = species("47347", "Cantharellus cibarius", "Golden Chanterelle")
 val MOREL = species("48701", "Morchella esculenta", "Common Morel")
 val PUGET_SOUND = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
 

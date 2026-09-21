@@ -26,7 +26,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 private val SALMON = Species("1", "Oncorhynchus", "salmon", TaxonRank.GENUS)
-private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANTERELLE = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 private val MOREL = Species("48701", "Morchella esculenta", "Common Morel", TaxonRank.SPECIES)
 private val AT = Instant.parse("2026-09-20T08:05:00Z")
 

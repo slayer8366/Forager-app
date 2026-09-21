@@ -15,7 +15,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private val AREA = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
-private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANTERELLE = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 
 private class Canned(private val body: String, private val status: Int = 200) : HttpTransport {
     var lastUrl: String? = null
@@ -37,7 +37,7 @@ class SeasonalityRequestTest {
         INaturalistCatalog(http, "https://example.test/v1").seasonality(CHANTERELLE, AREA)
 
         val url = http.lastUrl!!
-        assertTrue(url.contains("taxon_id=47348"), url)
+        assertTrue(url.contains("taxon_id=47347"), url)
         assertTrue(url.contains("interval=month_of_year"), url)
         assertTrue(url.contains("date_field=observed"), url)
         assertTrue(url.contains("swlat=47.0"), url)

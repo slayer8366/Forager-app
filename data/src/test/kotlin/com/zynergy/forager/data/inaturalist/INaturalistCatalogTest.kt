@@ -32,7 +32,7 @@ private class FakeHttp(
 
 private const val TWO_TAXA = """
 {"total_results":2,"page":1,"per_page":30,"results":[
-  {"id":47348,"name":"Cantharellus cibarius","preferred_common_name":"Golden Chanterelle","rank":"species","extra":"ignored"},
+  {"id":47347,"name":"Cantharellus cibarius","preferred_common_name":"Golden Chanterelle","rank":"species","extra":"ignored"},
   {"id":48701,"name":"Morchella esculenta","preferred_common_name":"Common Morel","rank":"species"}
 ]}
 """
@@ -102,13 +102,13 @@ class SearchMappingTest {
         assertEquals(listOf("Cantharellus cibarius", "Morchella esculenta"), ok.value.map { it.scientificName })
         assertEquals("Golden Chanterelle", ok.value.first().commonName)
         assertEquals(TaxonRank.SPECIES, ok.value.first().rank)
-        assertEquals("47348", ok.value.first().catalogId)
+        assertEquals("47347", ok.value.first().catalogId)
     }
 
     @Test
     fun `a truncated page is Partial and says how many match in total`() = runTest {
         val body = """{"total_results":840,"results":[
-          {"id":47348,"name":"Cantharellus cibarius","rank":"species"}
+          {"id":47347,"name":"Cantharellus cibarius","rank":"species"}
         ]}"""
         val result = catalog(body).search("cantharellus", 1)
 
@@ -120,7 +120,7 @@ class SearchMappingTest {
     @Test
     fun `a row missing its scientific name is dropped and the drop is reported`() = runTest {
         val body = """{"total_results":2,"results":[
-          {"id":47348,"name":"Cantharellus cibarius","rank":"species"},
+          {"id":47347,"name":"Cantharellus cibarius","rank":"species"},
           {"id":99,"rank":"species"}
         ]}"""
         val result = catalog(body).search("cantharellus", 30)

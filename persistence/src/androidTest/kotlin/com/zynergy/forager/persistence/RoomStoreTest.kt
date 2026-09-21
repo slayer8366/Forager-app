@@ -24,7 +24,7 @@ import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
 
-private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANTERELLE = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 private val TURKEY_TAIL = Species("48435", "Trametes versicolor", "turkey-tail", TaxonRank.SPECIES)
 private val PUGET = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
 private val NOON = Instant.parse("2026-09-20T12:00:00Z")

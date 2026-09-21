@@ -29,7 +29,7 @@ private class StubCatalog(private val result: Outcome<List<Species>>) : SpeciesC
         Outcome.Unsupported("seasonality not stubbed")
 }
 
-private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANTERELLE = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 
 private fun presenter(result: Outcome<List<Species>>, catalog: StubCatalog = StubCatalog(result)) =
     presenterWith(catalog)

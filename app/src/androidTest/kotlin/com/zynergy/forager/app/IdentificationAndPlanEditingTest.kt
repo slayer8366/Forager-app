@@ -32,7 +32,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
+private val CHANTERELLE = Species("47347", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)
 private val MOREL = Species("48701", "Morchella esculenta", "Common Morel", TaxonRank.SPECIES)
 private val AREA = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
 private const val WAIT_MS = 10_000L
