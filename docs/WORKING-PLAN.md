@@ -133,6 +133,35 @@ not.
 
 ---
 
+## What the Room research changed
+
+Checked against Google Maven and Maven Central on 2026-09-20 rather than recalled,
+and three of my working assumptions were wrong.
+
+- **`room-ktx` is an empty artifact** and has been since 2.7.0; its APIs moved into
+  `room-runtime` and the release notes ask people to remove it. I would have added it.
+- **KSP no longer versions as `<kotlin>-<ksp>`.** That scheme ended at 2.3.0, when KSP
+  stopped being a compiler plugin. There is no 2.4.x KSP and looking for one finds
+  nothing. Current is 2.3.12, and it pairs with Kotlin by not being tied to it.
+- **Room 2.8.5** is head; there is no 2.9.
+
+Two open bugs sit near this work, both specific to AGP 9's built-in Kotlin: `@Entity`
+together with `@Parcelize` fails to resolve types, and a `@ColumnInfo(name = ...)` on
+an `override` property carrying a `@property:` annotation is silently dropped so the
+column takes the property name instead. Neither is fixed as of 2.3.12. Plain data
+entities with no `@Parcelize` and no overridden annotated properties avoid both, which
+is what this app needs anyway.
+
+**One thing could not be verified: whether KSP 2.3.12 officially supports Kotlin
+2.4.20.** No compatibility table is published, and the question sits unanswered on the
+KSP tracker. The evidence is circumstantial. So this is attempted, not assumed, and if
+annotation processing fails under 2.4.20 that is the finding rather than a surprise.
+
 ## Running log
 
-- **A started.** Projection extraction, ahead of everything that will draw on it.
+- **A done.** Projection extracted, tested, and wired into the map. No visual change.
+- **Fabricated coordinates removed.** Every journal entry was being stamped with a
+  random point within about 33 km of a fixed spot, then rendered as "Located" and drawn
+  on the map. That is a made-up value someone could act on. Entries now save with no
+  location and the screen says why. The map honestly reports zero located entries.
+- **B next.** Room, with the versions above and the compatibility caveat.

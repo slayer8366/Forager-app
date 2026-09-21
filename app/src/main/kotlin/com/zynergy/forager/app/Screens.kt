@@ -100,7 +100,7 @@ fun JournalScreen(state: JournalScreenState) {
                     val text = note
                     if (text.isNotBlank()) {
                         scope.launch {
-                            state.addQuickNote(text, Coordinates(47.5 + entropy(), -122.5 + entropy()))
+                            state.addQuickNote(text, where = null)
                             note = ""
                         }
                     }
@@ -108,6 +108,12 @@ fun JournalScreen(state: JournalScreenState) {
                 modifier = Modifier.testTag("save-note"),
             ) { Text("Save") }
         }
+        Text(
+            "Entries are saved without a location: this build cannot read the device's position " +
+                "yet, and a made-up coordinate would put your find somewhere you have never been.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("no-location-note"),
+        )
         if (state.entries.isEmpty()) {
             Text(
                 "No entries yet. An unnamed find is still worth recording.",
@@ -131,8 +137,6 @@ fun JournalScreen(state: JournalScreenState) {
         }
     }
 }
-
-private fun entropy(): Double = (Math.random() - 0.5) * 0.6
 
 /**
  * Search, with each result able to join the plan.
