@@ -2,6 +2,7 @@ package com.zynergy.forager.domain.port
 
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Outcome
+import com.zynergy.forager.domain.RainfallWindow
 import com.zynergy.forager.domain.Species
 import java.time.LocalDate
 
@@ -37,4 +38,23 @@ interface TerrainSource {
         area: BoundingBox,
         onOrAbout: LocalDate,
     ): Outcome<ClosedRange<Int>>
+}
+
+
+/**
+ * Recent rainfall for an area.
+ *
+ * Separate from [TerrainSource] because it is a different kind of thing: this one has a real
+ * implementation that returns measured values, where soil, terrain and lag do not. Keeping them
+ * apart stops "weather works" being read as "conditions work".
+ */
+interface WeatherSource {
+
+    /**
+     * Daily rainfall for the [days] most recent days, ending today.
+     *
+     * Implementations report days the source could not supply as missing rather than as zero, and
+     * return [Outcome.Partial] when any are missing.
+     */
+    suspend fun recentRainfall(area: BoundingBox, days: Int): Outcome<RainfallWindow>
 }

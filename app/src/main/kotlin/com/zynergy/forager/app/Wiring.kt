@@ -4,6 +4,7 @@ import com.zynergy.forager.data.inaturalist.HttpResponse
 import com.zynergy.forager.data.inaturalist.HttpTransport
 import com.zynergy.forager.data.inaturalist.INaturalistCatalog
 import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
+import com.zynergy.forager.data.openmeteo.OpenMeteoWeatherSource
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.TripPlan
@@ -101,6 +102,7 @@ class UuidIdSource : IdSource {
 class AppContainer {
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
     private val terrain = UnavailableTerrainSource()
+    private val weather = OpenMeteoWeatherSource(AndroidHttpTransport())
     private val clock = SystemClock()
     private val ids = UuidIdSource()
 
@@ -114,5 +116,5 @@ class AppContainer {
     val plannerPresenter = TripPlannerPresenter(SuggestTargets(catalog), PlanTrip(planStore, clock, ids))
     val timingPresenter = PlanTimingPresenter(AssessPlanTiming(catalog))
     val seasonalityPresenter = SeasonalityPresenter(catalog)
-    val conditionsPresenter = ConditionsPresenter(terrain)
+    val conditionsPresenter = ConditionsPresenter(terrain, weather)
 }

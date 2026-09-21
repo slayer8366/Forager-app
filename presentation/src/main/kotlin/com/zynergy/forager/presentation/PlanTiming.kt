@@ -58,26 +58,42 @@ data class ConditionsUiState(
     val terrain: Notice? = null,
     val fruitingLag: Notice? = null,
     val lagDays: ClosedRange<Int>? = null,
+    val daysSinceRain: Int? = null,
 )
 
-class ConditionsPresenter(private val source: TerrainSource) {
+class ConditionsPresenter(
+    private val source: TerrainSource,
+    private val weather: com.zynergy.forager.domain.port.WeatherSource? = null,
+) {
 
     suspend fun load(criteria: PlanCriteria, species: Species?, on: LocalDate): ConditionsUiState {
         val soil = source.soil(criteria.area).asNoticeOrNull()
         val terrain = source.terrain(criteria.area).asNoticeOrNull()
+        var rainfallDays: Int? = null
+        
+        // Load recent rainfall if the weather source is available
+        if (weather != null) {
+            when (val rain = weather.recentRainfall(criteria.area, 14)) {
+                is Outcome.Ok -> rainfallDays = rain.value.daysSinceWettingRain()
+                is Outcome.Partial -> rainfallDays = rain.value.daysSinceWettingRain()
+                else -> Unit
+            }
+        }
+
         return if (species == null) {
             ConditionsUiState(
                 soil = soil,
                 terrain = terrain,
                 fruitingLag = Notice.NotAvailable("a target species, to say anything about lag"),
+                daysSinceRain = rainfallDays,
             )
         } else {
             when (val lag = source.fruitingLagDays(species, criteria.area, on)) {
-                is Outcome.Ok -> ConditionsUiState(soil, terrain, null, lag.value)
-                is Outcome.Partial -> ConditionsUiState(soil, terrain, Notice.Incomplete(lag.note), lag.value)
-                is Outcome.Failed -> ConditionsUiState(soil, terrain, Notice.Problem(lag.reason))
+                is Outcome.Ok -> ConditionsUiState(soil, terrain, null, lag.value, daysSinceRain = rainfallDays)
+                is Outcome.Partial -> ConditionsUiState(soil, terrain, Notice.Incomplete(lag.note), lag.value, daysSinceRain = rainfallDays)
+                is Outcome.Failed -> ConditionsUiState(soil, terrain, Notice.Problem(lag.reason), daysSinceRain = rainfallDays)
                 is Outcome.Unsupported ->
-                    ConditionsUiState(soil, terrain, Notice.NotAvailable(lag.capability))
+                    ConditionsUiState(soil, terrain, Notice.NotAvailable(lag.capability), daysSinceRain = rainfallDays)
             }
         }
     }

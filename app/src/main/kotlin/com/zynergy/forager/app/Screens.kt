@@ -325,16 +325,22 @@ fun MapScreen(
  */
 @Composable
 private fun ConditionsPanel(state: ConditionsUiState) {
-    if (state.soil == null && state.terrain == null && state.fruitingLag == null) return
+    if (state.soil == null && state.terrain == null && state.fruitingLag == null && state.daysSinceRain == null) return
     Column(modifier = Modifier.padding(vertical = 8.dp).testTag("conditions-panel")) {
         Text(
             "Conditions",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
+        state.daysSinceRain?.let {
+            Text(
+                "Last wetting rain: $it day${if (it == 1) "" else "s"} ago",
+                modifier = Modifier.padding(horizontal = 16.dp).testTag("rainfall-value"),
+            )
+        }
         state.lagDays?.let {
             Text(
-                "Rain to fruiting: ${it.start} to ${it.endInclusive} days",
+                "Rain to fruiting: ${it.start} to ${it.endInclusive} days (estimated)",
                 modifier = Modifier.padding(horizontal = 16.dp).testTag("lag-value"),
             )
         }
