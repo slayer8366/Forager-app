@@ -79,6 +79,14 @@ import com.zynergy.forager.presentation.PlanTimingUiState
 import com.zynergy.forager.presentation.SeasonalityUiState
 import com.zynergy.forager.presentation.SpeciesSearchUiState
 import com.zynergy.forager.presentation.TripPlannerUiState
+import com.zynergy.forager.presentation.IdentificationForm
+import com.zynergy.forager.presentation.historyLine
+import com.zynergy.forager.presentation.identificationLabel
+import com.zynergy.forager.presentation.identificationSuggestions
+import com.zynergy.forager.domain.Identification
+import com.zynergy.forager.domain.TaxonSource
+import com.zynergy.forager.domain.TripPlan
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 
 class JournalScreenState(private val container: AppContainer) {
@@ -153,14 +161,57 @@ class JournalScreenState(private val container: AppContainer) {
         locationNotice = null
     }
 
-    suspend fun addQuickNote(note: String, where: Fix?) {
-        when (val outcome = container.recordSighting(species = null, notes = note, where = where)) {
-            is Outcome.Ok -> entries.add(0, outcome.value)
-            is Outcome.Partial -> entries.add(0, outcome.value)
-            is Outcome.Failed -> Unit
-            is Outcome.Unsupported -> Unit
-        }
+    /**
+     * The species field of the new-entry form. Held here, not inside the screen, so "I found it" on
+     * the Plan tab can fill it and it is still filled when the Journal tab opens.
+     */
+    var form by mutableStateOf(IdentificationForm())
+
+    /** Why the last save did not happen, shown until the next attempt. */
+    var saveNotice by mutableStateOf<Notice?>(null)
+        private set
+
+    /** Starts a new entry for [species], found on a plan. Only fills the form; nothing is saved. */
+    fun startEntryFor(species: Species) {
+        form = IdentificationForm().choose(species, TaxonSource.PLAN_TARGET)
+        saveNotice = null
     }
+
+    /**
+     * Saves the form as a new entry. Returns true when it was saved, so the screen clears only then:
+     * a refused or failed save keeps what the forager entered and says why.
+     */
+    suspend fun saveEntry(note: String, where: Fix?): Boolean =
+        when (val outcome = container.recordSighting(identification = form.identification, notes = note, where = where)) {
+            is Outcome.Ok -> saved(outcome.value, null)
+            is Outcome.Partial -> saved(outcome.value, Notice.Incomplete(outcome.note))
+            is Outcome.Failed -> { saveNotice = Notice.Problem(outcome.reason); false }
+            is Outcome.Unsupported -> { saveNotice = Notice.NotAvailable(outcome.capability); false }
+        }
+
+    private fun saved(entry: JournalEntry, notice: Notice?): Boolean {
+        entries.add(0, entry)
+        form = IdentificationForm()
+        saveNotice = notice
+        return true
+    }
+
+    /** Changes an entry's identification. Returns the reason when it was not changed, else null. */
+    suspend fun reidentify(entry: JournalEntry, identification: Identification): Notice? =
+        when (val outcome = container.reidentifyEntry(entry, identification)) {
+            is Outcome.Ok -> { replace(outcome.value); null }
+            is Outcome.Partial -> { replace(outcome.value); Notice.Incomplete(outcome.note) }
+            is Outcome.Failed -> Notice.Problem(outcome.reason)
+            is Outcome.Unsupported -> Notice.NotAvailable(outcome.capability)
+        }
+
+    private fun replace(entry: JournalEntry) {
+        val index = entries.indexOfFirst { it.id == entry.id }
+        if (index >= 0) entries[index] = entry
+    }
+
+    /** Searches the catalog for a name. Needs a connection; offline this comes back as a notice. */
+    suspend fun searchNames(query: String): SpeciesSearchUiState = container.searchPresenter.search(query)
 }
 
 @Composable
@@ -251,62 +302,251 @@ private fun LocationRow(state: JournalScreenState) {
     }
 }
 
+/**
+ * The species part of an entry: a field, what saving it would store, and names to choose from.
+ *
+ * Suggestions come from the current plan's targets and recent entries and need no connection.
+ * Search asks iNaturalist and needs one. Either way a name becomes a taxon only by being tapped;
+ * typed text is saved as typed.
+ */
 @Composable
-fun JournalScreen(state: JournalScreenState) {
+private fun IdentificationEditor(
+    form: IdentificationForm,
+    onFormChange: (IdentificationForm) -> Unit,
+    planTargets: List<Species>,
+    entries: List<JournalEntry>,
+    search: suspend (String) -> SpeciesSearchUiState,
+    tagPrefix: String,
+) {
+    val scope = rememberCoroutineScope()
+    var results by remember { mutableStateOf(SpeciesSearchUiState()) }
+    var searching by remember { mutableStateOf(false) }
+    val suggestions = if (form.chosen == null) identificationSuggestions(form.text, planTargets, entries) else emptyList()
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = form.text,
+                onValueChange = { onFormChange(form.typed(it)); results = SpeciesSearchUiState() },
+                label = { Text("Species (optional)") },
+                singleLine = true,
+                modifier = Modifier.weight(1f).testTag("$tagPrefix-species-field"),
+            )
+            Spacer(Modifier.padding(4.dp))
+            OutlinedButton(
+                onClick = {
+                    val q = form.text
+                    scope.launch {
+                        searching = true
+                        results = search(q)
+                        searching = false
+                    }
+                },
+                enabled = form.chosen == null && !searching,
+                modifier = Modifier.testTag("$tagPrefix-species-search"),
+            ) { Text("Search") }
+        }
+        Text(
+            form.status,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp).testTag("$tagPrefix-identification-status"),
+        )
+        if (form.text.isNotEmpty()) {
+            TextButton(
+                onClick = { onFormChange(IdentificationForm()); results = SpeciesSearchUiState() },
+                modifier = Modifier.testTag("$tagPrefix-species-clear"),
+            ) { Text("Clear, leave it unidentified") }
+        }
+        suggestions.forEach { s ->
+            Text(
+                "${s.species.displayName} · ${if (s.source == TaxonSource.PLAN_TARGET) "plan target" else "recent"}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onFormChange(form.choose(s.species, s.source)); results = SpeciesSearchUiState() }
+                    .padding(vertical = 6.dp)
+                    .testTag("$tagPrefix-suggestion-${s.species.catalogId}"),
+            )
+        }
+        if (searching) CircularProgressIndicator(modifier = Modifier.padding(8.dp))
+        results.notice?.let { NoticeLine(it, tag = "$tagPrefix-search-notice", problemTitle = "Search did not work") }
+        if (results.isEmptyResult) {
+            Text("Nothing matched that name.", style = MaterialTheme.typography.bodySmall)
+        }
+        if (form.chosen == null) {
+            results.results.take(MAX_SEARCH_RESULTS_SHOWN).forEach { s ->
+                Text(
+                    "${identificationLabel(Identification.Taxon(s, TaxonSource.SEARCH))} · ${s.scientificName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onFormChange(form.choose(s, TaxonSource.SEARCH)); results = SpeciesSearchUiState() }
+                        .padding(vertical = 6.dp)
+                        .testTag("$tagPrefix-result-${s.catalogId}"),
+                )
+            }
+        }
+    }
+}
+
+private const val MAX_SEARCH_RESULTS_SHOWN = 8
+
+@Composable
+fun JournalScreen(state: JournalScreenState, draft: PlanDraft) {
     val scope = rememberCoroutineScope()
     var note by rememberSaveable { mutableStateOf("") }
+    var openEntryId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { state.load() }
 
+    // One scrolling list, form first, so a long form never pushes the entries off a screen that
+    // cannot scroll to them. "journal-list" is only on it when there are entries, which is what that
+    // tag meant when the entries had a list of their own.
     Column(modifier = Modifier.fillMaxSize().testTag("journal-screen")) {
-        Text("Journal", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (state.entries.isNotEmpty()) Modifier.testTag("journal-list") else Modifier),
+    ) {
+        item {
+            Text("Journal", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
                 label = { Text("What did you find?") },
-                modifier = Modifier.testTag("note-field"),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("note-field"),
             )
-            Spacer(Modifier.padding(4.dp))
+            IdentificationEditor(
+                form = state.form,
+                onFormChange = { state.form = it },
+                planTargets = draft.criteria.targets,
+                entries = state.entries,
+                search = state::searchNames,
+                tagPrefix = "new",
+            )
+            LocationRow(state)
             Button(
                 onClick = {
                     val text = note
-                    if (text.isNotBlank()) {
-                        scope.launch {
-                            state.addQuickNote(text, where = state.pendingFix)
+                    scope.launch {
+                        if (state.saveEntry(text, where = state.pendingFix)) {
                             state.clearPendingFix()
                             note = ""
                         }
                     }
                 },
-                modifier = Modifier.testTag("save-note"),
-            ) { Text("Save") }
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("save-note"),
+            ) { Text("Save entry") }
+            state.saveNotice?.let { NoticeLine(it, tag = "save-entry-notice", problemTitle = "Not saved") }
+            state.loadFailure?.let {
+                NoticeLine(Notice.Problem(it), tag = "journal-load-failure")
+            }
+            if (state.entries.isEmpty() && state.loadFailure == null) {
+                Text(
+                    "No entries yet. An unnamed find is still worth recording.",
+                    modifier = Modifier.padding(16.dp).testTag("journal-empty"),
+                )
+            }
         }
-        LocationRow(state)
-        state.loadFailure?.let {
-            NoticeLine(Notice.Problem(it), tag = "journal-load-failure")
-        }
-        if (state.entries.isEmpty() && state.loadFailure == null) {
-            Text(
-                "No entries yet. An unnamed find is still worth recording.",
-                modifier = Modifier.padding(16.dp).testTag("journal-empty"),
+        items(state.entries, key = { it.id }) { entry ->
+            JournalEntryCard(
+                entry = entry,
+                open = openEntryId == entry.id,
+                onToggle = { openEntryId = if (openEntryId == entry.id) null else entry.id },
+                state = state,
+                draft = draft,
             )
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().testTag("journal-list")) {
-                items(state.entries) { entry ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(entry.species?.displayName ?: "Unidentified", fontWeight = FontWeight.Medium)
-                            if (entry.notes.isNotBlank()) Text(entry.notes)
-                            Text(
-                                locationLabel(entry.where),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+        }
+    }
+    }
+}
+
+/**
+ * One entry. Tapping it opens its identification history and the way to change it.
+ *
+ * The history lists every earlier identification with when it was made and how it was chosen,
+ * because in foraging "I first thought this was X" is safety information.
+ */
+@Composable
+private fun JournalEntryCard(
+    entry: JournalEntry,
+    open: Boolean,
+    onToggle: () -> Unit,
+    state: JournalScreenState,
+    draft: PlanDraft,
+) {
+    val scope = rememberCoroutineScope()
+    var changing by remember(entry.id) { mutableStateOf(false) }
+    var changeForm by remember(entry.id) { mutableStateOf(IdentificationForm()) }
+    var changeNotice by remember(entry.id) { mutableStateOf<Notice?>(null) }
+    val zone = remember { ZoneId.systemDefault() }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .testTag("entry-${entry.id}"),
+    ) {
+        Column(Modifier.clickable(onClick = onToggle).padding(12.dp)) {
+            Text(
+                identificationLabel(entry.identification),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.testTag("entry-identification-${entry.id}"),
+            )
+            if (entry.earlierIdentifications.isNotEmpty()) {
+                Text(
+                    "Identified ${entry.identifications.size} times. Tap to see the history.",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            if (entry.notes.isNotBlank()) Text(entry.notes)
+            Text(
+                locationLabel(entry.where),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (open) {
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp).testTag("entry-history-${entry.id}")) {
+                Text("Identification history, oldest first", style = MaterialTheme.typography.titleSmall)
+                entry.identifications.forEachIndexed { index, change ->
+                    val current = index == entry.identifications.lastIndex
+                    Text(
+                        historyLine(change, zone) + if (current) " (current)" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = if (current) FontWeight.Medium else FontWeight.Normal,
+                        modifier = Modifier.testTag("entry-history-${entry.id}-$index"),
+                    )
+                }
+                if (!changing) {
+                    OutlinedButton(
+                        onClick = { changing = true; changeForm = IdentificationForm(); changeNotice = null },
+                        modifier = Modifier.padding(top = 4.dp).testTag("entry-change-${entry.id}"),
+                    ) { Text("Change identification") }
+                } else {
+                    IdentificationEditor(
+                        form = changeForm,
+                        onFormChange = { changeForm = it },
+                        planTargets = draft.criteria.targets,
+                        entries = state.entries,
+                        search = state::searchNames,
+                        tagPrefix = "change",
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    changeNotice = state.reidentify(entry, changeForm.identification)
+                                    if (changeNotice == null) changing = false
+                                }
+                            },
+                            modifier = Modifier.testTag("entry-change-save-${entry.id}"),
+                        ) { Text("Save identification") }
+                        TextButton(
+                            onClick = { changing = false; changeNotice = null },
+                            modifier = Modifier.testTag("entry-change-cancel-${entry.id}"),
+                        ) { Text("Cancel") }
                     }
+                    changeNotice?.let { NoticeLine(it, tag = "entry-change-notice", problemTitle = "Not changed") }
                 }
             }
         }
@@ -530,9 +770,12 @@ private fun ConditionsPanel(state: ConditionsUiState) {
 
 /**
  * The planner: the criteria gathered from the other tabs, judged against the chosen month.
+ *
+ * A saved plan is edited in place: tapping it opens it in the draft, and Save keeps its id. Cancel
+ * writes nothing. [onFoundIt] opens a new journal entry for a saved plan's target.
  */
 @Composable
-fun PlanScreen(container: AppContainer, draft: PlanDraft) {
+fun PlanScreen(container: AppContainer, draft: PlanDraft, onFoundIt: (Species) -> Unit) {
     val scope = rememberCoroutineScope()
     val criteria = draft.criteria
     var timing by remember { mutableStateOf(PlanTimingUiState()) }
@@ -554,6 +797,25 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("plan-screen")) {
         Text("Plan a trip", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
+        draft.editing?.let { open ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("plan-editing"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Editing \u201c${open.name}\u201d. Nothing changes until you save.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = {
+                        draft.endEdit()
+                        saveResult = TripPlannerUiState()
+                    },
+                    modifier = Modifier.testTag("plan-edit-cancel"),
+                ) { Text("Cancel") }
+            }
+        }
         Text(
             "%.2f to %.2f N, %.2f to %.2f E · ${criteria.date} · ${criteria.month.displayName()}"
                 .format(criteria.area.south, criteria.area.north, criteria.area.west, criteria.area.east),
@@ -601,19 +863,29 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
             ) { Text("What is here?") }
         }
 
+        val open = draft.editing
         Button(
             onClick = {
                 scope.launch {
                     busy = true
-                    saveResult = container.plannerPresenter.save(
-                        criteria.name, criteria.date, criteria.area, criteria.targets,
-                    )
-                    if (saveResult.saved != null) savedPlans = container.plannerPresenter.upcoming()
+                    saveResult = if (open != null) {
+                        container.plannerPresenter.saveChanges(
+                            open.id, criteria.name, criteria.date, criteria.area, criteria.targets,
+                        )
+                    } else {
+                        container.plannerPresenter.save(
+                            criteria.name, criteria.date, criteria.area, criteria.targets,
+                        )
+                    }
+                    if (saveResult.saved != null) {
+                        if (open != null) draft.endEdit()
+                        savedPlans = container.plannerPresenter.upcoming()
+                    }
                     busy = false
                 }
             },
             modifier = Modifier.padding(horizontal = 16.dp).testTag("save-plan"),
-        ) { Text("Save plan") }
+        ) { Text(if (open != null) "Save changes" else "Save plan") }
         saveResult.saved?.let {
             Text(
                 "Saved \u201c${it.name}\u201d for ${it.date}",
@@ -690,24 +962,85 @@ fun PlanScreen(container: AppContainer, draft: PlanDraft) {
                 modifier = Modifier.padding(horizontal = 16.dp).testTag("no-saved-plans"),
             )
         }
+        if (savedPlans.plans.isNotEmpty()) {
+            Text(
+                if (draft.editing == null) "Tap a plan to edit it." else "Save or cancel the open plan to edit another.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
         savedPlans.plans.forEach { plan ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp)
-                    .testTag("saved-plan-${plan.id}"),
-            ) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(plan.name, fontWeight = FontWeight.Medium)
-                    Text(
-                        "${plan.date} · ${plan.targets.size} target${if (plan.targets.size == 1) "" else "s"}" +
-                            if (plan.targets.isEmpty()) "" else ": " + plan.targets.joinToString { it.displayName },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+            SavedPlanCard(
+                plan = plan,
+                isOpen = draft.editing?.id == plan.id,
+                canOpen = draft.editing == null,
+                onOpen = {
+                    if (draft.beginEdit(plan)) saveResult = TripPlannerUiState()
+                },
+                onDuplicate = {
+                    scope.launch {
+                        busy = true
+                        saveResult = container.plannerPresenter.duplicate(plan)
+                        if (saveResult.saved != null) savedPlans = container.plannerPresenter.upcoming()
+                        busy = false
+                    }
+                },
+                onFoundIt = onFoundIt,
+            )
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * One saved plan. The body opens it for editing; Duplicate saves a copy; each target has
+ * "I found it", which opens a journal entry for that species.
+ */
+@Composable
+private fun SavedPlanCard(
+    plan: TripPlan,
+    isOpen: Boolean,
+    canOpen: Boolean,
+    onOpen: () -> Unit,
+    onDuplicate: () -> Unit,
+    onFoundIt: (Species) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .testTag("saved-plan-${plan.id}"),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = canOpen, onClick = onOpen)
+                .padding(12.dp)
+                .testTag("open-plan-${plan.id}"),
+        ) {
+            Text(plan.name, fontWeight = FontWeight.Medium)
+            Text(
+                "${plan.date} \u00b7 ${plan.targets.size} target${if (plan.targets.size == 1) "" else "s"}" +
+                    if (isOpen) " \u00b7 open for editing" else "",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        plan.targets.forEach { target ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(target.displayName, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = { onFoundIt(target) },
+                    modifier = Modifier.testTag("found-${plan.id}-${target.catalogId}"),
+                ) { Text("I found it") }
+            }
+        }
+        TextButton(
+            onClick = onDuplicate,
+            modifier = Modifier.padding(start = 4.dp).testTag("duplicate-plan-${plan.id}"),
+        ) { Text("Duplicate") }
     }
 }
 

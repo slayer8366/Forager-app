@@ -15,6 +15,7 @@ import com.zynergy.forager.domain.port.IdSource
 import com.zynergy.forager.domain.usecase.AssessPlanTiming
 import com.zynergy.forager.domain.usecase.PlanTrip
 import com.zynergy.forager.domain.usecase.RecordSighting
+import com.zynergy.forager.domain.usecase.ReidentifyEntry
 import com.zynergy.forager.domain.usecase.SearchSpecies
 import com.zynergy.forager.domain.usecase.SuggestTargets
 import com.zynergy.forager.domain.usecase.UpcomingPlans
@@ -94,6 +95,7 @@ class AppContainer(context: Context) {
     val today: LocalDate get() = clock.today()
 
     val recordSighting = RecordSighting(journalStore, clock, ids)
+    val reidentifyEntry = ReidentifyEntry(journalStore, clock)
     val searchPresenter = SpeciesSearchPresenter(SearchSpecies(catalog))
     val plannerPresenter = TripPlannerPresenter(
         SuggestTargets(catalog),

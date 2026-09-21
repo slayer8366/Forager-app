@@ -72,10 +72,17 @@ fun ForagerApp(container: AppContainer) {
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (selected) {
-                Tab.JOURNAL -> JournalScreen(journalState)
+                Tab.JOURNAL -> JournalScreen(journalState, draft)
                 Tab.SEARCH -> SpeciesSearchScreen(container, draft)
                 Tab.MAP -> MapScreen(container, journalState, draft)
-                Tab.PLAN -> PlanScreen(container, draft)
+                Tab.PLAN -> PlanScreen(
+                    container,
+                    draft,
+                    onFoundIt = { species ->
+                        journalState.startEntryFor(species)
+                        selected = Tab.JOURNAL
+                    },
+                )
             }
         }
     }
