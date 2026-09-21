@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.core.ktx)
     implementation(libs.maplibre.android)
+    implementation(libs.okhttp)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)

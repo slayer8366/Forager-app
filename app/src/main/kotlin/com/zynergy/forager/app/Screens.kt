@@ -58,7 +58,9 @@ import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.presentation.ConditionsUiState
-import com.zynergy.forager.presentation.EquirectangularProjection
+import com.zynergy.forager.presentation.MapOverlayBuilder
+import com.zynergy.forager.data.basemap.TileHealth
+import androidx.compose.runtime.collectAsState
 import com.zynergy.forager.presentation.locationLabel
 import com.zynergy.forager.presentation.Notice
 import com.zynergy.forager.presentation.PlanTimingUiState
@@ -378,7 +380,7 @@ fun SpeciesSearchScreen(container: AppContainer, draft: PlanDraft) {
  * statement about soil, terrain and fruiting lag.
  *
  * Tapping inside the plot recentres the area on the tapped point, which is how the area is chosen.
- * Still a coordinate plot with no basemap tiles, and it says so.
+ * OpenStreetMap tiles through MapLibre, with the planning area and located entries drawn over them.
  */
 @Composable
 fun MapScreen(
@@ -397,7 +399,7 @@ fun MapScreen(
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("map-screen")) {
         Text("Map", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
         Text(
-            "Coordinate plot, no basemap tiles. Tap to move your planning area. " +
+            "Tap the map to move your planning area. " +
                 "${located.size} of ${journal.entries.size} journal entries are located.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp).testTag("map-caption"),
@@ -408,62 +410,16 @@ fun MapScreen(
             modifier = Modifier.padding(horizontal = 16.dp).testTag("area-readout"),
         )
 
-        val view = boxAround(PlanDraft.DEFAULT_AREA.centre(), 1.2, 1.2)
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .padding(16.dp)
-                .testTag("map-canvas")
-                .pointerInput(view) {
-                    detectTapGestures { offset ->
-                        val projection = EquirectangularProjection(
-                            view, size.width.toFloat(), size.height.toFloat(),
-                        )
-                        draft.centreOn(projection.toCoordinates(offset.x, offset.y))
-                    }
-                },
-        ) {
-            val projection = EquirectangularProjection(view, size.width, size.height)
-            drawRect(color = Color(0xFFE7EFE7))
-
-            val (topLeft, bottomRight) = projection.rectFor(area)
-            drawRect(
-                color = Color(0x332E7D32),
-                topLeft = Offset(topLeft.x, topLeft.y),
-                size = androidx.compose.ui.geometry.Size(
-                    bottomRight.x - topLeft.x,
-                    bottomRight.y - topLeft.y,
-                ),
-            )
-            located.forEach { entry ->
-                val fix = entry.where ?: return@forEach
-                if (!projection.isVisible(fix.coordinates)) return@forEach
-                val point = projection.toScreen(fix.coordinates)
-                val centre = Offset(point.x, point.y)
-
-                // Every fix is drawn as the area it actually claims. Only a fix inside the app's
-                // accuracy limit also gets a solid dot, so a coarse one never reads as a point.
-                // With no measured radius there is no area to draw, so none is invented.
-                fix.accuracyMetres?.let { metres ->
-                    val radii = projection.radiiFor(metres, fix.coordinates)
-                    drawOval(
-                        color = Color(0x331B5E20),
-                        topLeft = Offset(centre.x - radii.x, centre.y - radii.y),
-                        size = androidx.compose.ui.geometry.Size(radii.x * 2, radii.y * 2),
-                    )
-                }
-                if (fix.isPreciseEnoughForAFind) {
-                    drawCircle(Color(0xFF1B5E20), radius = 9f, center = centre)
-                } else {
-                    drawCircle(
-                        Color(0xFF8A6D00),
-                        radius = 9f,
-                        center = centre,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f),
-                    )
-                }
-            }
+        val overlay = remember(area, located) { MapOverlayBuilder.build(area, located) }
+        BasemapView(
+            overlay = overlay,
+            initialArea = area,
+            onTap = draft::centreOn,
+            modifier = Modifier.fillMaxWidth().height(320.dp).padding(16.dp),
+        )
+        val tileHealth by BasemapHttp.health.collectAsState()
+        (tileHealth as? TileHealth.Problem)?.let {
+            NoticeLine(Notice.Problem(it.message), tag = "tile-problem", problemTitle = "Background map")
         }
 
         Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
