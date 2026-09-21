@@ -34,3 +34,14 @@ internal data class SpeciesCountDto(
     val count: Int = 0,
     val taxon: TaxonDto? = null,
 )
+
+@Serializable
+internal data class HistogramEnvelope(
+    @SerialName("total_results") val totalResults: Int = 0,
+    val results: HistogramBuckets = HistogramBuckets(),
+)
+
+@Serializable
+internal data class HistogramBuckets(
+    @SerialName("month_of_year") val monthOfYear: Map<String, Int> = emptyMap(),
+)

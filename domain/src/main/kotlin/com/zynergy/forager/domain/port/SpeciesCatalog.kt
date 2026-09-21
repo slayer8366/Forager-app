@@ -2,6 +2,7 @@ package com.zynergy.forager.domain.port
 
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Outcome
+import com.zynergy.forager.domain.Seasonality
 import com.zynergy.forager.domain.Species
 
 /**
@@ -21,4 +22,12 @@ interface SpeciesCatalog {
 
     /** Taxa recorded within [area], used by the trip planner to suggest targets. */
     suspend fun recordedIn(area: BoundingBox, limit: Int): Outcome<List<Species>>
+
+    /**
+     * Monthly record counts for [species] inside [area].
+     *
+     * Answers "when is this reported here", which is what the planner needs and what the data can
+     * actually support. It is not a fruiting forecast; see [Seasonality].
+     */
+    suspend fun seasonality(species: Species, area: BoundingBox): Outcome<Seasonality>
 }

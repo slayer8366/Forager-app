@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
 fun ForagerApp(container: AppContainer) {
     var selected by rememberSaveable { mutableStateOf(Tab.JOURNAL) }
     val journalState = remember { JournalScreenState(container) }
+    val draft = remember { PlanDraft(container.today) }
 
     Scaffold(
         bottomBar = {
@@ -72,9 +73,9 @@ fun ForagerApp(container: AppContainer) {
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (selected) {
                 Tab.JOURNAL -> JournalScreen(journalState)
-                Tab.SEARCH -> SpeciesSearchScreen(container)
-                Tab.MAP -> MapScreen(journalState)
-                Tab.PLAN -> PlanScreen(container)
+                Tab.SEARCH -> SpeciesSearchScreen(container, draft)
+                Tab.MAP -> MapScreen(container, journalState, draft)
+                Tab.PLAN -> PlanScreen(container, draft)
             }
         }
     }

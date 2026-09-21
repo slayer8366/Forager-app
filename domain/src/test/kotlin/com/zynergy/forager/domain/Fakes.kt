@@ -15,7 +15,17 @@ import java.time.LocalDate
 class FakeCatalog(
     private val searchResult: Outcome<List<Species>> = Outcome.Ok(emptyList()),
     private val areaResult: Outcome<List<Species>> = Outcome.Ok(emptyList()),
+    private val seasonalityBySpecies: Map<String, Outcome<Seasonality>> = emptyMap(),
 ) : SpeciesCatalog {
+    var seasonalityCalls = 0
+        private set
+
+    override suspend fun seasonality(species: Species, area: BoundingBox): Outcome<Seasonality> {
+        seasonalityCalls++
+        return seasonalityBySpecies[species.catalogId]
+            ?: Outcome.Ok(Seasonality(flatYear(0), area, species))
+    }
+
     var searchCalls = 0
         private set
     var lastQuery: String? = null
@@ -74,3 +84,11 @@ fun species(id: String, scientific: String, common: String? = null) =
 val CHANTERELLE = species("47348", "Cantharellus cibarius", "Golden Chanterelle")
 val MOREL = species("48701", "Morchella esculenta", "Common Morel")
 val PUGET_SOUND = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
+
+/** Every month set to [count]; the twelve-month requirement is satisfied by construction. */
+fun flatYear(count: Int): Map<java.time.Month, Int> =
+    java.time.Month.entries.associateWith { count }
+
+/** A year with [peak] in [peakMonth] and [rest] everywhere else. */
+fun yearPeaking(peakMonth: java.time.Month, peak: Int, rest: Int = 0): Map<java.time.Month, Int> =
+    java.time.Month.entries.associateWith { if (it == peakMonth) peak else rest }

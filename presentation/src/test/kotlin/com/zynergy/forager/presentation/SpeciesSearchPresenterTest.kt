@@ -22,6 +22,11 @@ private class StubCatalog(private val result: Outcome<List<Species>>) : SpeciesC
         return result
     }
     override suspend fun recordedIn(area: BoundingBox, limit: Int): Outcome<List<Species>> = result
+    override suspend fun seasonality(
+        species: Species,
+        area: BoundingBox,
+    ): Outcome<com.zynergy.forager.domain.Seasonality> =
+        Outcome.Unsupported("seasonality not stubbed")
 }
 
 private val CHANTERELLE = Species("47348", "Cantharellus cibarius", "Golden Chanterelle", TaxonRank.SPECIES)

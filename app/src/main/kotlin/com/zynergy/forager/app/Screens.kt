@@ -1,6 +1,8 @@
 package com.zynergy.forager.app
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,10 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,21 +34,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
+import com.zynergy.forager.presentation.ConditionsUiState
 import com.zynergy.forager.presentation.Notice
+import com.zynergy.forager.presentation.PlanTimingUiState
+import com.zynergy.forager.presentation.SeasonalityUiState
 import com.zynergy.forager.presentation.SpeciesSearchUiState
 import com.zynergy.forager.presentation.TripPlannerUiState
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
-/** Journal entries held for the screen. In-memory, like the store behind it. */
 class JournalScreenState(private val container: AppContainer) {
     val entries = mutableStateListOf<JournalEntry>()
 
@@ -57,20 +63,14 @@ class JournalScreenState(private val container: AppContainer) {
     }
 }
 
-/**
- * Renders a [Notice] so the three cases stay distinguishable on screen.
- *
- * Incomplete is shown beside whatever data arrived. Problem replaces it. NotAvailable says the
- * source cannot answer, which is not the same as nothing being there.
- */
 @Composable
-private fun NoticeLine(notice: Notice) {
+private fun NoticeLine(notice: Notice, tag: String = "notice") {
     val (prefix, detail, colour) = when (notice) {
         is Notice.Incomplete -> Triple("Showing some of the matches", notice.detail, Color(0xFF8A6D00))
-        is Notice.Problem -> Triple("Could not search", notice.detail, Color(0xFFB3261E))
-        is Notice.NotAvailable -> Triple("Not available from this source", notice.capability, Color(0xFF49454F))
+        is Notice.Problem -> Triple("Could not load", notice.detail, Color(0xFFB3261E))
+        is Notice.NotAvailable -> Triple("Not available", notice.capability, Color(0xFF49454F))
     }
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("notice")) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag(tag)) {
         Text(prefix, color = colour, fontWeight = FontWeight.Medium)
         Text(detail, color = colour, style = MaterialTheme.typography.bodySmall)
     }
@@ -82,11 +82,7 @@ fun JournalScreen(state: JournalScreenState) {
     var note by rememberSaveable { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().testTag("journal-screen")) {
-        Text(
-            "Journal",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(16.dp),
-        )
+        Text("Journal", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -135,15 +131,21 @@ fun JournalScreen(state: JournalScreenState) {
     }
 }
 
-/** A tiny spread so successive quick notes do not stack on one pixel of the plot. */
 private fun entropy(): Double = (Math.random() - 0.5) * 0.6
 
+/**
+ * Search, with each result able to join the plan.
+ *
+ * Tapping a row adds it as a target, which is the link between "what am I looking for" and the
+ * planner. The row says whether it is already in the plan so a second tap is not a silent no-op.
+ */
 @Composable
-fun SpeciesSearchScreen(container: AppContainer) {
+fun SpeciesSearchScreen(container: AppContainer, draft: PlanDraft) {
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var state by remember { mutableStateOf(SpeciesSearchUiState()) }
     var searching by remember { mutableStateOf(false) }
+    val chosen = draft.criteria.targets.map { it.catalogId }.toSet()
 
     Column(modifier = Modifier.fillMaxSize().testTag("search-screen")) {
         Text("Species", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
@@ -167,20 +169,37 @@ fun SpeciesSearchScreen(container: AppContainer) {
                 modifier = Modifier.testTag("search-button"),
             ) { Text("Search") }
         }
-        if (searching) {
-            CircularProgressIndicator(modifier = Modifier.padding(16.dp).testTag("searching"))
-        }
+        Text(
+            "Tap a result to add it to your trip plan.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        if (searching) CircularProgressIndicator(modifier = Modifier.padding(16.dp).testTag("searching"))
         state.notice?.let { NoticeLine(it) }
         if (state.isEmptyResult) {
             Text("Nothing matched that name.", modifier = Modifier.padding(16.dp).testTag("search-empty"))
         }
         LazyColumn(modifier = Modifier.fillMaxSize().testTag("search-results")) {
             items(state.results) { s: Species ->
-                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                val already = s.catalogId in chosen
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable { draft.addTarget(s) }
+                        .testTag("result-${s.catalogId}"),
+                ) {
                     Column(Modifier.padding(12.dp)) {
                         Text(s.displayName, fontWeight = FontWeight.Medium)
-                        Text("${s.scientificName} · ${s.rank.name.lowercase()}",
-                            style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "${s.scientificName} · ${s.rank.name.lowercase()}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            if (already) "In your plan" else "Tap to add to plan",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (already) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
@@ -189,76 +208,241 @@ fun SpeciesSearchScreen(container: AppContainer) {
 }
 
 /**
- * A coordinate plot, not a tiled basemap.
+ * The map: the plan's area, the journal's located entries, the charted target's year, and an honest
+ * statement about soil, terrain and fruiting lag.
  *
- * Named honestly on screen: there is no tile source in this build, so this draws located entries
- * inside a fixed area rather than pretending to be a map. Tiles are a later increment, and a
- * placeholder that looked like a real map would invite the wrong conclusion from a screenshot.
+ * Tapping inside the plot recentres the area on the tapped point, which is how the area is chosen.
+ * Still a coordinate plot with no basemap tiles, and it says so.
  */
 @Composable
-fun MapScreen(state: JournalScreenState) {
-    val area = BoundingBox(south = 47.0, west = -123.0, north = 48.0, east = -122.0)
-    val located = state.entries.filter { it.isMappable }
+fun MapScreen(
+    container: AppContainer,
+    journal: JournalScreenState,
+    draft: PlanDraft,
+) {
+    val scope = rememberCoroutineScope()
+    val area = draft.criteria.area
+    val located = journal.entries.filter { it.isMappable }
+    var season by remember { mutableStateOf(SeasonalityUiState()) }
+    var conditions by remember { mutableStateOf(ConditionsUiState()) }
+    var loading by remember { mutableStateOf(false) }
+    val charted = draft.charted
 
-    Column(modifier = Modifier.fillMaxSize().testTag("map-screen")) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("map-screen")) {
         Text("Map", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
         Text(
-            "Coordinate plot, no basemap tiles in this build. ${located.size} of ${state.entries.size} entries are located.",
+            "Coordinate plot, no basemap tiles. Tap to move your planning area. " +
+                "${located.size} of ${journal.entries.size} journal entries are located.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp).testTag("map-caption"),
         )
+        Text(
+            "Area %.2f to %.2f N, %.2f to %.2f E".format(area.south, area.north, area.west, area.east),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 16.dp).testTag("area-readout"),
+        )
+
+        val view = PlanDraft.DEFAULT_AREA.let { d ->
+            boxAround(d.centre(), 1.2, 1.2)
+        }
         Canvas(
-            modifier = Modifier.fillMaxWidth().height(320.dp).padding(16.dp).testTag("map-canvas"),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .padding(16.dp)
+                .testTag("map-canvas")
+                .pointerInput(view) {
+                    detectTapGestures { offset ->
+                        val lon = view.west + (offset.x / size.width) * (view.east - view.west)
+                        val lat = view.north - (offset.y / size.height) * (view.north - view.south)
+                        draft.centreOn(Coordinates(lat.coerceIn(-89.0, 89.0), lon.coerceIn(-179.0, 179.0)))
+                    }
+                },
         ) {
             drawRect(color = Color(0xFFE7EFE7))
+            fun xOf(lon: Double) = ((lon - view.west) / (view.east - view.west)).toFloat() * size.width
+            fun yOf(lat: Double) = (1f - ((lat - view.south) / (view.north - view.south)).toFloat()) * size.height
+
+            drawRect(
+                color = Color(0x332E7D32),
+                topLeft = Offset(xOf(area.west), yOf(area.north)),
+                size = androidx.compose.ui.geometry.Size(
+                    xOf(area.east) - xOf(area.west),
+                    yOf(area.south) - yOf(area.north),
+                ),
+            )
             located.forEach { entry ->
-                val point = entry.where ?: return@forEach
-                val x = ((point.longitude - area.west) / (area.east - area.west)).toFloat() * size.width
-                val y = (1f - ((point.latitude - area.south) / (area.north - area.south)).toFloat()) * size.height
-                drawCircle(color = Color(0xFF1B5E20), radius = 10f, center = Offset(x, y))
+                val p = entry.where ?: return@forEach
+                drawCircle(Color(0xFF1B5E20), radius = 9f, center = Offset(xOf(p.longitude), yOf(p.latitude)))
             }
+        }
+
+        Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { draft.resizeBy(0.7) }, modifier = Modifier.testTag("area-smaller")) {
+                Text("Smaller area")
+            }
+            OutlinedButton(onClick = { draft.resizeBy(1.4) }, modifier = Modifier.testTag("area-bigger")) {
+                Text("Bigger area")
+            }
+        }
+
+        if (charted == null) {
+            Text(
+                "Add a target from the Species tab to chart its season here.",
+                modifier = Modifier.padding(16.dp).testTag("no-charted-target"),
+            )
+        } else {
+            Button(
+                onClick = {
+                    scope.launch {
+                        loading = true
+                        season = container.seasonalityPresenter.load(charted, draft.criteria)
+                        conditions = container.conditionsPresenter.load(
+                            draft.criteria, charted, draft.criteria.date,
+                        )
+                        loading = false
+                    }
+                },
+                modifier = Modifier.padding(16.dp).testTag("load-season"),
+            ) { Text("Chart ${charted.displayName} for this area") }
+
+            if (loading) CircularProgressIndicator(modifier = Modifier.padding(16.dp).testTag("season-loading"))
+            season.notice?.let { NoticeLine(it, tag = "season-notice") }
+            season.seasonality?.let {
+                SeasonalityChart(it, draft.criteria.month, modifier = Modifier.padding(vertical = 8.dp))
+            }
+            ConditionsPanel(conditions)
         }
     }
 }
 
+/**
+ * Soil, terrain and rain-to-fruiting lag.
+ *
+ * Every one of these is unavailable in this build, and the panel says so with the reason rather
+ * than leaving a gap. A blank space reads as "nothing to worry about"; a stated "not available,
+ * and here is what it would take" does not.
+ */
 @Composable
-fun PlanScreen(container: AppContainer) {
-    val scope = rememberCoroutineScope()
-    var state by remember { mutableStateOf(TripPlannerUiState()) }
-    var busy by remember { mutableStateOf(false) }
-    val area = BoundingBox(south = 47.0, west = -123.0, north = 47.9, east = -122.1)
+private fun ConditionsPanel(state: ConditionsUiState) {
+    if (state.soil == null && state.terrain == null && state.fruitingLag == null) return
+    Column(modifier = Modifier.padding(vertical = 8.dp).testTag("conditions-panel")) {
+        Text(
+            "Conditions",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        state.lagDays?.let {
+            Text(
+                "Rain to fruiting: ${it.start} to ${it.endInclusive} days",
+                modifier = Modifier.padding(horizontal = 16.dp).testTag("lag-value"),
+            )
+        }
+        state.soil?.let { NoticeLine(it, tag = "soil-notice") }
+        state.terrain?.let { NoticeLine(it, tag = "terrain-notice") }
+        state.fruitingLag?.let { NoticeLine(it, tag = "lag-notice") }
+    }
+}
 
-    Column(
-        modifier = Modifier.fillMaxSize().testTag("plan-screen"),
-        verticalArrangement = Arrangement.Top,
-    ) {
+/**
+ * The planner: the criteria gathered from the other tabs, judged against the chosen month.
+ */
+@Composable
+fun PlanScreen(container: AppContainer, draft: PlanDraft) {
+    val scope = rememberCoroutineScope()
+    val criteria = draft.criteria
+    var timing by remember { mutableStateOf(PlanTimingUiState()) }
+    var suggestions by remember { mutableStateOf(TripPlannerUiState()) }
+    var busy by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("plan-screen")) {
         Text("Plan a trip", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
         Text(
-            "Puget Sound area, ${LocalDate.now()}",
+            "%.2f to %.2f N, %.2f to %.2f E · ${criteria.date} · ${criteria.month.displayName()}"
+                .format(criteria.area.south, criteria.area.north, criteria.area.west, criteria.area.east),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp).testTag("plan-criteria"),
+        )
+        Text(
+            "${criteria.targets.size} target${if (criteria.targets.size == 1) "" else "s"}",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
-        Button(
-            onClick = {
-                scope.launch {
-                    busy = true
-                    state = container.plannerPresenter.suggest(area)
-                    busy = false
-                }
-            },
-            modifier = Modifier.padding(16.dp).testTag("suggest-button"),
-        ) { Text("What is recorded here?") }
+
+        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        timing = container.timingPresenter.assess(criteria)
+                        busy = false
+                    }
+                },
+                modifier = Modifier.testTag("assess-button"),
+            ) { Text("Check my timing") }
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        suggestions = container.plannerPresenter.suggest(criteria.area)
+                        busy = false
+                    }
+                },
+                modifier = Modifier.testTag("suggest-button"),
+            ) { Text("What is here?") }
+        }
 
         if (busy) CircularProgressIndicator(modifier = Modifier.padding(16.dp).testTag("plan-busy"))
-        state.notice?.let { NoticeLine(it) }
-        state.saved?.let { Text("Saved: ${it.name}", modifier = Modifier.padding(16.dp)) }
+        timing.notice?.let { NoticeLine(it, tag = "timing-notice") }
 
-        LazyColumn(modifier = Modifier.fillMaxSize().testTag("suggestions")) {
-            items(state.suggestions) { s: Species ->
-                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    Text(s.displayName, modifier = Modifier.padding(12.dp))
+        if (timing.assessed && timing.timings.isEmpty() && timing.notice == null) {
+            Text(
+                "No targets yet. Add some from the Species tab.",
+                modifier = Modifier.padding(16.dp).testTag("no-targets"),
+            )
+        }
+
+        timing.timings.forEach { t ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable { draft.chart(t.species) }
+                    .testTag("timing-${t.species.catalogId}"),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(t.species.displayName, fontWeight = FontWeight.Medium)
+                    Text(
+                        when {
+                            t.hasNoRecords -> "No records in this area, so nothing can be said"
+                            t.isPeakMonth -> "${criteria.month.displayName()} is the busiest month here"
+                            else -> "Busiest here in ${t.busiestMonth?.displayName() ?: "no month"}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (!t.hasNoRecords) {
+                        Text(
+                            "%.0f%% of this area's %d records fall in %s"
+                                .format(
+                                    t.shareInChosenMonth * 100,
+                                    t.totalRecords,
+                                    criteria.month.displayName(),
+                                ),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
             }
+        }
+
+        suggestions.notice?.let { NoticeLine(it, tag = "suggest-notice") }
+        suggestions.suggestions.take(12).forEach { s ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .clickable { draft.addTarget(s) },
+            ) { Text(s.displayName, modifier = Modifier.padding(12.dp)) }
         }
     }
 }

@@ -2,12 +2,14 @@ package com.zynergy.forager.data.inaturalist
 
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Outcome
+import com.zynergy.forager.domain.Seasonality
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.domain.TaxonRank
 import com.zynergy.forager.domain.port.SpeciesCatalog
 import kotlinx.serialization.json.Json
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Month
 
 /**
  * [SpeciesCatalog] backed by the iNaturalist v1 API.
@@ -55,6 +57,47 @@ class INaturalistCatalog(
         return fetch(url) { body ->
             val envelope = json.decodeFromString<SpeciesCountsEnvelope>(body)
             envelope.results.mapNotNull { it.taxon } to envelope.totalResults
+        }
+    }
+
+    /**
+     * Monthly record counts for one taxon inside an area.
+     *
+     * Every month is filled, including the zeros the API omits, because a caller distinguishing
+     * "no records in April" from "April missing from the response" should not have to.
+     */
+    override suspend fun seasonality(species: Species, area: BoundingBox): Outcome<Seasonality> {
+        val url = buildString {
+            append("$baseUrl/observations/histogram")
+            append("?taxon_id=${species.catalogId}")
+            append("&swlat=${area.south}&swlng=${area.west}")
+            append("&nelat=${area.north}&nelng=${area.east}")
+            append("&date_field=observed&interval=month_of_year")
+        }
+        val response = try {
+            http.get(url)
+        } catch (e: Exception) {
+            return Outcome.Failed("could not reach iNaturalist", e)
+        }
+        if (!response.isSuccess) {
+            return Outcome.Failed("iNaturalist returned HTTP ${response.status}")
+        }
+        val buckets = try {
+            json.decodeFromString<HistogramEnvelope>(response.body).results.monthOfYear
+        } catch (e: Exception) {
+            return Outcome.Failed("could not read the seasonality response", e)
+        }
+
+        val counts = Month.entries.associateWith { month ->
+            buckets[month.value.toString()] ?: 0
+        }
+        val unreadable = buckets.keys.count { it.toIntOrNull()?.takeIf { n -> n in 1..12 } == null }
+        val seasonality = Seasonality(counts, area, species)
+
+        return if (unreadable > 0) {
+            Outcome.Partial(seasonality, "$unreadable bucket keys were not months and were skipped")
+        } else {
+            Outcome.Ok(seasonality)
         }
     }
 

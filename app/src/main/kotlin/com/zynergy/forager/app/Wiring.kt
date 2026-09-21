@@ -3,6 +3,7 @@ package com.zynergy.forager.app
 import com.zynergy.forager.data.inaturalist.HttpResponse
 import com.zynergy.forager.data.inaturalist.HttpTransport
 import com.zynergy.forager.data.inaturalist.INaturalistCatalog
+import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.TripPlan
@@ -10,11 +11,15 @@ import com.zynergy.forager.domain.port.Clock
 import com.zynergy.forager.domain.port.IdSource
 import com.zynergy.forager.domain.port.JournalStore
 import com.zynergy.forager.domain.port.TripPlanStore
+import com.zynergy.forager.domain.usecase.AssessPlanTiming
 import com.zynergy.forager.domain.usecase.PlanTrip
 import com.zynergy.forager.domain.usecase.RecordSighting
 import com.zynergy.forager.domain.usecase.SearchSpecies
 import com.zynergy.forager.domain.usecase.SuggestTargets
 import com.zynergy.forager.presentation.SpeciesSearchPresenter
+import com.zynergy.forager.presentation.ConditionsPresenter
+import com.zynergy.forager.presentation.PlanTimingPresenter
+import com.zynergy.forager.presentation.SeasonalityPresenter
 import com.zynergy.forager.presentation.TripPlannerPresenter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -95,13 +100,19 @@ class UuidIdSource : IdSource {
 /** One place the graph is assembled, so no screen constructs its own dependencies. */
 class AppContainer {
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
+    private val terrain = UnavailableTerrainSource()
     private val clock = SystemClock()
     private val ids = UuidIdSource()
 
     val journalStore = InMemoryJournalStore()
     private val planStore = InMemoryTripPlanStore()
 
+    val today: LocalDate get() = clock.today()
+
     val recordSighting = RecordSighting(journalStore, clock, ids)
     val searchPresenter = SpeciesSearchPresenter(SearchSpecies(catalog))
     val plannerPresenter = TripPlannerPresenter(SuggestTargets(catalog), PlanTrip(planStore, clock, ids))
+    val timingPresenter = PlanTimingPresenter(AssessPlanTiming(catalog))
+    val seasonalityPresenter = SeasonalityPresenter(catalog)
+    val conditionsPresenter = ConditionsPresenter(terrain)
 }
