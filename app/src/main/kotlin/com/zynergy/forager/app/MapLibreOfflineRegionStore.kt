@@ -79,8 +79,11 @@ class MapLibreOfflineRegionStore(private val context: Context) : OfflineRegionSt
         return suspendCancellableCoroutine<Outcome<SavedRegion>> { cont ->
             region.setObserver(object : OfflineRegion.OfflineRegionObserver {
                 override fun onStatusChanged(status: OfflineRegionStatus) {
+                    // MapLibre keeps reporting after completion. A report arriving after this download
+                    // has finished would otherwise put a finished progress bar back on screen.
+                    if (!cont.isActive) return
                     onProgress(DownloadProgress(status.completedResourceCount, status.requiredResourceCount))
-                    if (status.isComplete && cont.isActive) {
+                    if (status.isComplete) {
                         region.setDownloadState(OfflineRegion.STATE_INACTIVE)
                         // The count MapLibre actually fetched, against the one reserved from TileMath.
                         Log.i(TAG, "region $name complete: ${status.completedTileCount} tiles fetched, $reservedTiles reserved")

@@ -1,42 +1,22 @@
 package com.zynergy.forager.app
 
 import android.content.Context
-import android.util.Log
 import org.maplibre.android.MapLibre
-import org.maplibre.android.storage.FileSource
-import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-
-private val storageRedirected = AtomicBoolean(false)
 
 /**
- * The one way this app starts MapLibre. Every caller goes through here, never MapLibre.getInstance.
+ * The one way this app starts MapLibre: the library, then the HTTP client every tile request uses.
  *
- * MapLibre keeps saved regions in its database, and by default that database lives in the cache
- * directory, which Android may clear under storage pressure without asking. The owner's earlier app
- * confirmed on hardware that saved regions counted as cache. So the database is moved under files/
- * before MapLibre first opens it. Doing that in one function means no call site can get the order
- * wrong, which is how the earlier app missed it once.
+ * There is deliberately no storage redirect here. The owner's earlier app, on MapLibre 13.5.0,
+ * moved MapLibre's database out of the cache directory before initialising. On 13.6.1 that is both
+ * unnecessary and fatal:
+ * - FileSource.getDefaultCachePath returns Context.getFilesDir() unless the manifest opts into
+ *   external storage (read from the 13.6.1 bytecode on 2026-09-20). The database was found at
+ *   files/mbgl-offline.db on the emulator before any redirect existed.
+ * - setResourcesCachePath now requires MapLibre.getInstance to have run first. Calling it before,
+ *   in the earlier app's order, threw MapLibreConfigurationException on the emulator.
  */
 fun initializeMapLibre(context: Context) {
     val app = context.applicationContext
-    if (storageRedirected.compareAndSet(false, true)) {
-        val dir = File(app.filesDir, "maplibre").apply { mkdirs() }
-        FileSource.setResourcesCachePath(
-            app,
-            dir.absolutePath,
-            object : FileSource.ResourcesCachePathChangeCallback {
-                override fun onSuccess(path: String) {
-                    Log.i("ForagerMapStorage", "MapLibre storage at $path")
-                }
-
-                override fun onError(message: String) {
-                    // Not fatal, MapLibre keeps its previous path, but saved regions are then at risk.
-                    Log.w("ForagerMapStorage", "Could not move MapLibre storage out of cache: $message")
-                }
-            },
-        )
-    }
     MapLibre.getInstance(app)
     BasemapHttp.install(app)
 }

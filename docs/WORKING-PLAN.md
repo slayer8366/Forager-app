@@ -348,7 +348,63 @@ observed on the wire.
 **Test runs with the emulator up** now use APKs built beforehand and
 `adb shell am instrument`, so Gradle and the emulator never run at the same time.
 
-## D offline: next
+## D offline: done, checked on the emulator 2026-09-20
+
+**The owner's rulings, their words:** "All 3" for when to use the offline style;
+then "bring the size down to 14", replaced by "Rather make the tile allowance 6000
+per user". Built as follows:
+- **Style modes.** The three modes are a setting, saved in DataStore. The default
+  is "when the connection drops". If the owner meant all three combined into one
+  rule, this needs changing.
+- **The allowance.** 6,000 tiles in total across saved regions, enforced per
+  installation, since there are no accounts. Detail goes to zoom 15 where the area
+  fits. Otherwise the plan offers the highest zoom that fits, down to 11, and below
+  that it refuses.
+
+**Seen on the device:**
+- **Tile counts match MapLibre exactly.** Two downloads, and in both MapLibre's
+  fetched count equalled the app's own reservation: 1,675 of 1,675 at zoom 15, and
+  3,477 of 3,477 at zoom 14. The allowance is counted in real tiles.
+- **Offline really works.** In airplane mode the map switched to the offline style
+  and drew the saved area in detail. Those vector tiles can only have come from the
+  saved region, because the online style is raster.
+- **The three modes.** "Inside saved areas" switched style while online. Manual
+  stayed online until the switch was flipped, and when offline it showed the
+  suggestion.
+- **The allowance moves with every change.** It counts a running download from
+  its start, the plan re-prices itself against what is left, and deleting a region
+  gives its tiles back.
+- **Regions survive restarts.** A saved region was still there after the emulator
+  restarted.
+- **The camera survives a tab change.** 0.0% of the map's pixels changed. The
+  control, a fresh launch, differed by 32.4%, so the zero is evidence.
+
+**Defects found and fixed on the device:**
+1. **A crash from a premise that no longer held.** The owner's earlier app, on
+   MapLibre 13.5.0, moved MapLibre's database out of the cache directory before
+   starting MapLibre. On 13.6.1 that call requires MapLibre to be started first,
+   and it crashed. The premise was also wrong for 13.6.1: its bytecode defaults to
+   `files/`, and the database was already there before any redirect existed. The
+   redirect is removed, and its comment records why.
+2. **A finished progress bar stayed on screen** and disabled Save and Delete.
+   MapLibre keeps reporting after completion, so late reports are now ignored.
+3. **The allowance did not count a download in progress.**
+4. **An on-device test broke once storage was real.** `JournalEntryFieldTest`
+   saved a fixed note and found three copies left by earlier runs. It passed before
+   only because Gradle's runner wipes app data. It now uses a per-run note, and it
+   passed twice in a row without a wipe.
+
+**Not done or not checked:**
+- The "too large" refusal was not reached on the device. It is unit-tested.
+- Nothing stops the same area being saved twice. That errs safe on the allowance,
+  but wastes tiles.
+- A download stops if the process dies. The region is left unfinished and keeps
+  its reservation until deleted.
+- The offline style has no place names: the worker's style has no text layers.
+  That is what keeps it download-safe, and it is a trade-off to revisit only with
+  a style that has been tested for download.
+
+## Superseded: D offline, next
 
 Through the existing Cloudflare worker, using MapLibre's offline regions. The old
 app's lessons that apply:

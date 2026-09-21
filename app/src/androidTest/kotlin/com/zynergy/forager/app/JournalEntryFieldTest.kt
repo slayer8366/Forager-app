@@ -27,12 +27,18 @@ class JournalEntryFieldTest {
         rule.onNodeWithText("orange bracket on fir").assertIsDisplayed()
     }
 
+    /**
+     * The note carries a per-run suffix because the journal is stored for real. Entries saved by
+     * earlier runs stay in the app's database unless the runner wipes app data, and a fixed text
+     * then matched several rows and failed on ambiguity rather than on anything about saving.
+     */
     @Test
     fun savingANoteAddsItToTheJournalList() {
-        rule.onNodeWithTag("note-field").performTextInput("chicken of the woods")
+        val note = "chicken of the woods ${System.nanoTime()}"
+        rule.onNodeWithTag("note-field").performTextInput(note)
         rule.onNodeWithTag("save-note").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("journal-list").assertIsDisplayed()
-        rule.onNodeWithText("chicken of the woods").assertIsDisplayed()
+        rule.onNodeWithText(note).assertIsDisplayed()
     }
 }

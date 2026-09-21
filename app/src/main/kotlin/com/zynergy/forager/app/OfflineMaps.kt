@@ -45,16 +45,32 @@ class OfflineMaps(private val store: OfflineRegionStore, private val scope: Coro
 
     fun refresh() {
         scope.launch {
+            refreshNow()
+        }
+    }
+
+    private suspend fun refreshNow() {
+        run {
             when (val outcome = store.list()) {
                 is Outcome.Ok -> _regions.value = outcome.value
                 is Outcome.Partial -> { _regions.value = outcome.value; _problem.value = outcome.note }
                 is Outcome.Failed -> _problem.value = outcome.reason
                 is Outcome.Unsupported -> _problem.value = "offline maps are not supported on this device"
             }
+            recount()
         }
     }
 
-    fun plan(area: BoundingBox): OfflineDownloadPlan = planner(area, _regions.value.tilesUsed())
+    /** Tiles reserved by a download that has started but is not yet in the saved list. */
+    private val _inFlight = MutableStateFlow(0L)
+
+    /** Everything counted against the allowance, including a download still running. */
+    val tilesUsed: StateFlow<Long> get() = _used.asStateFlow()
+    private val _used = MutableStateFlow(0L)
+
+    private fun recount() { _used.value = _regions.value.tilesUsed() + _inFlight.value }
+
+    fun plan(area: BoundingBox): OfflineDownloadPlan = planner(area, _used.value)
 
     fun partlyOutsideCoverage(area: BoundingBox): Boolean = planner.partlyOutsideCoverage(area)
 
@@ -68,11 +84,16 @@ class OfflineMaps(private val store: OfflineRegionStore, private val scope: Coro
         }
         _problem.value = null
         _progress.value = DownloadProgress(0, 0)
+        _inFlight.value = tiles
+        recount()
         download = scope.launch {
             val outcome = store.download(name, area, maxZoom, tiles) { _progress.value = it }
             _progress.value = null
             if (outcome is Outcome.Failed) _problem.value = outcome.reason
-            refresh()
+            // The region is in MapLibre's list from the moment it was created, finished or not,
+            // so the in-flight reservation hands over to the listed one here.
+            _inFlight.value = 0
+            refreshNow()
         }
     }
 

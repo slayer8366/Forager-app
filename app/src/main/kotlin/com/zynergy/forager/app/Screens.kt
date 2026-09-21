@@ -761,12 +761,13 @@ private fun OfflineMapsSection(container: AppContainer, area: BoundingBox, mode:
     val regions by offline.regions.collectAsState()
     val progress by offline.progress.collectAsState()
     val problem by offline.problem.collectAsState()
-    val plan = remember(area, regions) { offline.plan(area) }
+    val used by offline.tilesUsed.collectAsState()
+    val plan = remember(area, used) { offline.plan(area) }
 
     Column(modifier = Modifier.padding(16.dp).testTag("offline-section")) {
         Text("Offline maps", style = MaterialTheme.typography.titleSmall)
         Text(
-            allowanceText(regions.tilesUsed()),
+            allowanceText(used),
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.testTag("offline-allowance"),
         )
