@@ -1,6 +1,7 @@
 package com.zynergy.forager.app
 
 import android.content.Context
+import android.util.Log
 import com.zynergy.forager.data.basemap.TileHealth
 import com.zynergy.forager.data.basemap.basemapUserAgent
 import com.zynergy.forager.data.basemap.tileHealthFor
@@ -39,9 +40,9 @@ object BasemapHttp {
                     val request = chain.request().newBuilder().header("User-Agent", agent).build()
                     val watched = request.url.host == OSM_TILE_HOST
                     try {
-                        chain.proceed(request).also { if (watched) _health.value = tileHealthFor(it.code) }
+                        chain.proceed(request).also { if (watched) record(tileHealthFor(it.code)) }
                     } catch (e: IOException) {
-                        if (watched) _health.value = tileHealthFor(null)
+                        if (watched) record(tileHealthFor(null))
                         throw e
                     }
                 }
@@ -50,6 +51,15 @@ object BasemapHttp {
             installed = true
         }
     }
+
+    /** Logs only changes, so the log shows when the basemap broke or recovered without a line per tile. */
+    private fun record(next: TileHealth) {
+        val previous = _health.value
+        _health.value = next
+        if (next != previous) Log.i(TAG, "OSM tile health: $previous -> $next")
+    }
+
+    private const val TAG = "ForagerBasemap"
 
     private fun versionNameOf(context: Context): String =
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"

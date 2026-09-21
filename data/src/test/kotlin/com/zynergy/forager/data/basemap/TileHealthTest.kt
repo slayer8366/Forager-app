@@ -34,3 +34,24 @@ class TileHealthTest {
     fun `any other failure reports its code`() =
         assertTrue(assertIs<TileHealth.Problem>(tileHealthFor(502)).message.contains("HTTP 502"))
 }
+
+class BasemapNoticeTest {
+
+    @Test
+    fun `offline is reported even when no tile request has failed`() {
+        val notice = basemapNotice(online = false, health = TileHealth.Healthy)
+        assertTrue(notice!!.startsWith("No connection"), notice)
+    }
+
+    @Test
+    fun `online with a refused tile reports the refusal`() {
+        val problem = tileHealthFor(403) as TileHealth.Problem
+        assertEquals(problem.message, basemapNotice(online = true, health = problem))
+    }
+
+    @Test
+    fun `online and healthy says nothing`() {
+        assertEquals(null, basemapNotice(online = true, health = TileHealth.Healthy))
+        assertEquals(null, basemapNotice(online = true, health = TileHealth.Unknown))
+    }
+}

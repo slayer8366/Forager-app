@@ -1,6 +1,7 @@
 package com.zynergy.forager.app
 
 import android.Manifest
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,7 +60,7 @@ import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.presentation.ConditionsUiState
 import com.zynergy.forager.presentation.MapOverlayBuilder
-import com.zynergy.forager.data.basemap.TileHealth
+import com.zynergy.forager.data.basemap.basemapNotice
 import androidx.compose.runtime.collectAsState
 import com.zynergy.forager.presentation.locationLabel
 import com.zynergy.forager.presentation.Notice
@@ -418,8 +419,10 @@ fun MapScreen(
             modifier = Modifier.fillMaxWidth().height(320.dp).padding(16.dp),
         )
         val tileHealth by BasemapHttp.health.collectAsState()
-        (tileHealth as? TileHealth.Problem)?.let {
-            NoticeLine(Notice.Problem(it.message), tag = "tile-problem", problemTitle = "Background map")
+        val context = LocalContext.current
+        val online by remember(context) { context.networkOnline() }.collectAsState(initial = true)
+        basemapNotice(online, tileHealth)?.let {
+            NoticeLine(Notice.Problem(it), tag = "tile-problem", problemTitle = "Background map")
         }
 
         Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

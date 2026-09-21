@@ -27,3 +27,16 @@ fun tileHealthFor(statusCode: Int?): TileHealth = when {
     statusCode == 404 -> TileHealth.Healthy
     else -> TileHealth.Problem("Map tiles are not loading: the map server answered HTTP $statusCode.")
 }
+
+/**
+ * The one line the map shows about its background tiles, or null when there is nothing to say.
+ *
+ * Being offline is checked first and separately, because MapLibre stops requesting tiles when it
+ * believes the device is offline. No request means no failed response, so the tile watcher alone
+ * would stay silent exactly when the map is least complete.
+ */
+fun basemapNotice(online: Boolean, health: TileHealth): String? = when {
+    !online -> "No connection. The map shows only areas already loaded; your journal still saves."
+    health is TileHealth.Problem -> health.message
+    else -> null
+}
