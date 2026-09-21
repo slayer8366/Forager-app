@@ -77,11 +77,7 @@ class OfflineMaps(private val store: OfflineRegionStore, private val scope: Coro
     fun save(name: String, area: BoundingBox) {
         if (downloading) return
         val plan = plan(area)
-        val (maxZoom, tiles) = when (plan) {
-            is OfflineDownloadPlan.FullDetail -> plan.maxZoom to plan.tiles
-            is OfflineDownloadPlan.ReducedDetail -> plan.maxZoom to plan.tiles
-            else -> return
-        }
+        val (maxZoom, tiles) = (plan as? OfflineDownloadPlan.FullDetail)?.let { it.maxZoom to it.tiles } ?: return
         _problem.value = null
         _progress.value = DownloadProgress(0, 0)
         _inFlight.value = tiles

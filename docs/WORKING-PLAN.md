@@ -404,6 +404,26 @@ per user". Built as follows:
   That is what keeps it download-safe, and it is a trade-off to revisit only with
   a style that has been tested for download.
 
+## Ruling 2026-09-20: keep zoom at 15
+
+**The owner's words:** "Keep zoom at 15". Read as: every download is full detail,
+and detail is never cut to fit the allowance. This supersedes the "Otherwise the
+plan offers the highest zoom that fits, down to 11" line in the entry above, which
+stays as the record of what was first built.
+
+An area that does not fit at zoom 15 is now refused. The refusal gives the tiles it
+needs and the tiles left, and says to shrink the area or delete a saved region. The
+reduced-detail plan type, and the judgement-based zoom-11 floor that came with it,
+are deleted.
+
+Revert-checked. Making the planner accept everything failed exactly the three
+refusal tests, with no compile errors, and the forward line was confirmed restored.
+On the device, the default area read "needs 13,603 tiles at full detail and 2,523
+are left" with Save disabled, and an area shrunk three times saved at 1,675 tiles.
+
+The zoom-14 region saved during the earlier device check is still on the emulator.
+It is test data from before the ruling, and nothing in the app creates one now.
+
 ## Superseded: D offline, next
 
 Through the existing Cloudflare worker, using MapLibre's offline regions. The old

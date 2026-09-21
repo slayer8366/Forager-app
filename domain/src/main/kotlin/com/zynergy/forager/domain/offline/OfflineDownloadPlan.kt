@@ -8,14 +8,8 @@ sealed interface OfflineDownloadPlan {
     /** The whole area at full detail fits in what is left of the allowance. */
     data class FullDetail(val maxZoom: Int, val tiles: Long) : OfflineDownloadPlan
 
-    /**
-     * Full detail would go over the allowance, but a coarser download fits.
-     * [fullDetailTiles] is carried so the user can see what they are giving up.
-     */
-    data class ReducedDetail(val maxZoom: Int, val tiles: Long, val fullDetailTiles: Long) : OfflineDownloadPlan
-
-    /** Not even the least useful detail fits. The area has to shrink or other regions go. */
-    data class TooLarge(val tilesAtMinimumDetail: Long, val remaining: Long) : OfflineDownloadPlan
+    /** Full detail does not fit. The area has to shrink or saved regions go; detail is never cut. */
+    data class TooLarge(val tilesNeeded: Long, val remaining: Long) : OfflineDownloadPlan
 
     /** The offline server has no tiles here at all. */
     data object OutsideCoverage : OfflineDownloadPlan
@@ -28,10 +22,10 @@ sealed interface OfflineDownloadPlan {
  * no accounts, so it is enforced per installation: a reinstall resets it. Enforcing it per person
  * would need the offline server to know who is asking, and it does not.
  *
- * Detail stops at [MAX_ZOOM], which is where the offline extract itself stops; asking for more
- * would count tiles the server cannot supply. [MIN_USEFUL_ZOOM] is a judgement, not a derived
- * figure: below it roads and paths stop being drawn well enough to walk by, so a download that
- * cannot reach it is refused rather than saved as something that looks like a map and is not one.
+ * Every download is full detail, to [MAX_ZOOM], which is where the offline extract itself stops.
+ * The owner ruled on 2026-09-20 to keep zoom at 15 rather than save coarser maps when the allowance
+ * runs short, so an area that does not fit is refused with the count it needs. An earlier version
+ * offered the most detail that fit instead; that fallback is gone.
  */
 class PlanOfflineDownload(
     private val coverage: BoundingBox,
@@ -42,13 +36,11 @@ class PlanOfflineDownload(
         val remaining = (allowance - tilesAlreadyUsed).coerceAtLeast(0)
 
         val full = TileMath.tilesBetween(area, MIN_ZOOM, MAX_ZOOM)
-        if (full <= remaining) return OfflineDownloadPlan.FullDetail(MAX_ZOOM, full)
-
-        for (zoom in MAX_ZOOM - 1 downTo MIN_USEFUL_ZOOM) {
-            val tiles = TileMath.tilesBetween(area, MIN_ZOOM, zoom)
-            if (tiles <= remaining) return OfflineDownloadPlan.ReducedDetail(zoom, tiles, full)
+        return if (full <= remaining) {
+            OfflineDownloadPlan.FullDetail(MAX_ZOOM, full)
+        } else {
+            OfflineDownloadPlan.TooLarge(full, remaining)
         }
-        return OfflineDownloadPlan.TooLarge(TileMath.tilesBetween(area, MIN_ZOOM, MIN_USEFUL_ZOOM), remaining)
     }
 
     /** True when part of [area] falls outside what the offline server has. */
@@ -63,6 +55,5 @@ class PlanOfflineDownload(
         const val ALLOWANCE_TILES = 6000L
         const val MIN_ZOOM = 0
         const val MAX_ZOOM = 15
-        const val MIN_USEFUL_ZOOM = 11
     }
 }

@@ -64,21 +64,19 @@ class PlanOfflineDownloadTest {
     }
 
     @Test
-    fun `a planning-sized area gets the most detail that fits, and no more`() {
-        val result = assertIs<OfflineDownloadPlan.ReducedDetail>(plan(PLANNING_AREA, tilesAlreadyUsed = 0))
-        assertTrue(result.tiles <= 6000, "must fit: ${result.tiles}")
-        assertTrue(
-            TileMath.tilesBetween(PLANNING_AREA, 0, result.maxZoom + 1) > 6000,
-            "one more level must not fit, or this was not the most detail",
-        )
-        assertEquals(TileMath.tilesBetween(PLANNING_AREA, 0, 15), result.fullDetailTiles)
+    fun `an area too big for full detail is refused, not saved at lower detail`() {
+        val result = assertIs<OfflineDownloadPlan.TooLarge>(plan(PLANNING_AREA, tilesAlreadyUsed = 0))
+        assertEquals(TileMath.tilesBetween(PLANNING_AREA, 0, 15), result.tilesNeeded)
+        assertEquals(6000, result.remaining)
     }
 
     @Test
     fun `tiles already used come off the allowance`() {
         val fresh = plan(SMALL_AREA, tilesAlreadyUsed = 0) as OfflineDownloadPlan.FullDetail
-        val tight = plan(SMALL_AREA, tilesAlreadyUsed = 6000 - fresh.tiles + 1)
-        assertFalse(tight is OfflineDownloadPlan.FullDetail, "one tile short must not fit at full detail")
+        val tight = assertIs<OfflineDownloadPlan.TooLarge>(plan(SMALL_AREA, tilesAlreadyUsed = 6000 - fresh.tiles + 1))
+        assertEquals(fresh.tiles - 1, tight.remaining, "one tile short must be refused")
+        val exact = plan(SMALL_AREA, tilesAlreadyUsed = 6000 - fresh.tiles)
+        assertIs<OfflineDownloadPlan.FullDetail>(exact, "exactly enough must fit")
     }
 
     @Test

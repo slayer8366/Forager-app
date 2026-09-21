@@ -783,7 +783,7 @@ private fun OfflineMapsSection(container: AppContainer, area: BoundingBox, mode:
                 modifier = Modifier.testTag("offline-partial-coverage"),
             )
         }
-        val canSave = plan is OfflineDownloadPlan.FullDetail || plan is OfflineDownloadPlan.ReducedDetail
+        val canSave = plan is OfflineDownloadPlan.FullDetail
         Button(
             onClick = {
                 val c = area.centre()
