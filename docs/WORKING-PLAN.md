@@ -4,7 +4,7 @@ A living document. Updated as the session goes, not written once and left to rot
 Its job is to hold the reasoning that does not fit in a commit message, especially
 where two pieces of groundwork are about to touch the same thing.
 
-Last updated: 2026-09-20
+Last updated: 2026-09-20 (species identification and plan editing done)
 
 ---
 
@@ -460,3 +460,85 @@ This changes the dependency, the licence text the app must show, and whether
 offline is possible at all. So it is recorded here as an open decision rather than
 guessed. The projection's Mercator conversion can be built without it; the tile
 source cannot.
+
+## Species on entries and editing saved plans: done, checked on the emulator 2026-09-20
+
+Built from `docs/handoffs/2026-09-20-species-identification-and-plan-editing.md`. Base
+`ac3fa01` was confirmed as an ancestor of `main`. The only commit after it was the handoff
+itself, `5e96980`. Every premise in the handoff held. Two line numbers had drifted: the
+quick-note call is at `Screens.kt:157`, and the "Open" entry above cites `:143`. That entry is
+superseded by this section.
+
+**Decisions this session made, as the handoff asked:**
+- **History storage, schema v3.** A new table, `identification_change`, indexed on `entry_id`,
+  with no foreign key. It holds one row per change, in `rowId` order. Timestamps are not used for
+  ordering, because a phone's clock can be set back. `kind` is TAXON, UNCONFIRMED or
+  UNIDENTIFIED. `source` records how a taxon was chosen: SEARCH, PLAN_TARGET, RECENT_ENTRY or
+  NOT_RECORDED. The last two go beyond the handoff's three sources. RECENT_ENTRY is needed
+  because recent species are offered as suggestions. NOT_RECORDED is for version 2 rows, which
+  never said where their species came from.
+- **No snapshot on `journal_entry`.** The current identification is the latest history row. The
+  four version 2 species columns were dropped, because a copy that could disagree with the
+  history is a second claim about the same fact. SQLite on API 26 cannot drop a column, so
+  `MIGRATION_2_3` rebuilds the table.
+- **Migration 2 to 3.** Each entry gets one history row, dated at `recorded_at`. That date is true
+  by construction: version 2 could not change a species after saving. The kind is TAXON exactly
+  when the version 2 reader built a species. Every species value is copied across as it was,
+  including a half-written one.
+- **"I found it".** `ForagerApp` passes a callback to `PlanScreen`. It fills the form held in
+  `JournalScreenState` and switches the tab, so the form survives the switch.
+- **Past dates on edit.** They are refused, by the same rule as a new plan. Only the midnight edge
+  can reach this, because past plans are not listed.
+- **Edit in place.** `PlanDraft.beginEdit` / `endEdit`. While editing, Save keeps the plan's id.
+  Cancel restores the draft from before the edit and writes nothing.
+
+**Tests.** JUnit XML, fresh run with `--rerun-tasks`: domain 99 (was 85), data 50 (50),
+presentation 48 (35). From `am instrument`: persistence on device 18 (10), app on device 7 (2).
+The app suite passed twice in a row without a wipe.
+
+**Revert checks.** For each: a saved copy, a one-line edit, no compile errors in the build log,
+a restore from the copy, and the forward line confirmed present afterwards. Each run failed
+exactly one test, the targeted one:
+- **Migration.** CASE 'TAXON' was changed to 'UNIDENTIFIED'. The migration test failed with the
+  chanterelle row as UNIDENTIFIED.
+- **History kept.** `allChanges` was made to keep only the latest row per entry.
+  `aChangedIdentificationKeepsEveryEarlierOne` failed with only the last change present.
+- **Never auto-match.** `IdentificationForm.typed` was made to keep the earlier choice. The
+  test failed with "expected Unconfirmed(salmon) but was Taxon(...salmon...)".
+- **Cancel.** `editing = null` was removed from `endEdit`. The cancel test failed: the open plan
+  had been overwritten with the "Fresh plan" name.
+
+**Device checks, all five done:**
+1. **Offline naming.** In airplane mode, "salmon" was saved as UNCONFIRMED `[salmon]`. Search said
+   "could not reach iNaturalist". After reconnecting and relaunching, the entry and its row were
+   unchanged.
+2. **Identify later.** The entry went Unidentified, then the genus Cantharellus from search, then
+   Unidentified, then Golden Chanterelle (47347) from search. All four lines are shown with their
+   times and sources, and the database matches.
+3. **"I found it".** On a plan built through the UI, the form read "Will be saved as Yellow
+   Morels, chosen from a plan target". The row is TAXON / PLAN_TARGET / 1062674, identical to the
+   plan's target row.
+4. **Plan editing.** The row after Cancel was byte-identical to the row before. Save kept id
+   `57321c4d…` under the new name. Duplicate made `9825ca5a…`, "(copy)", with the same date, area
+   and target.
+5. **Upgrade.** The `ac3fa01` APK was installed over the device's version 2 database, and two
+   species rows were inserted with sqlite3. The old build showed them. The new build was then
+   installed with `-r`: user_version became 3, all 8 entries were kept, both species became
+   TAXON / NOT_RECORDED, and there was no crash in logcat. The database was backed up first.
+
+**Found on the way, not fixed:**
+- **Catalog id 47348 is the genus Cantharellus in iNaturalist, not Cantharellus cibarius.**
+  Search on the device returned 47348 for the genus and 47347 for the species. The existing test
+  constants label 47348 "Cantharellus cibarius / Golden Chanterelle", and this session's
+  upgrade-check seed on the emulator did too. It affects test data only. On the emulator it shows
+  as two "Golden Chanterelle · recent" suggestions with different ids.
+- **An empty change form saves "Unidentified" as a change.** That is by design, since "I no
+  longer think it is that" is a real change and the status line says so. But one tap is enough
+  to do it. Whether to require an explicit choice is the owner's call.
+- **Ranks the app does not model read as UNKNOWN.** iNaturalist's "Yellow Morels" is one. This
+  predates this work.
+- **The old quick-note path dropped a failed save silently** (`Screens.kt`, before this change).
+  The new Save shows the failure as "Not saved".
+
+**Not checked:** rotation, which recreates `AppContainer` and loses the form and the edit session.
+That predates this work. Also a real device, as opposed to the emulator.
