@@ -249,7 +249,53 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
      find" action that opens the journal with that species filled in.
   They are not exclusive, but they build different screens.
 
-## D, the basemap, needs a decision before code
+## D, the basemap: decided 2026-09-20
+
+**The owner's words:** "Maplibre as the server, openstreetmaps for online, pm tiles
+for offline. Its". The message ends there, so it may be cut off. MapLibre is a
+renderer on the device, not a server, so this is read as MapLibre drawing the map.
+
+**What OpenStreetMap's tile policy requires,** quoted from
+operations.osmfoundation.org/policies/tiles on 2026-09-20:
+- Attribution shown clearly on the map.
+- "a distinct, stable User-Agent naming your app". A library default is not allowed.
+- Server caching headers honoured, or tiles cached for at least 7 days.
+- "Offline use is not permitted on tile.openstreetmap.org." This is why offline has
+  to come from somewhere else, and it agrees with the owner's split.
+- "Access may be blocked without prior notice." So a basemap that fails to load has
+  to say so on screen, not show a blank grid.
+
+**Prior art in the owner's earlier app,** `~/Zynergy/Forager`. It made the same
+choice and got there first: MapLibre 13.5.0 and OSM raster tiles online. Offline, a
+Cloudflare Worker read a Protomaps PMTiles extract from R2 and served ordinary
+vector tiles plus an offline style. That worker still answers: `us.json` and
+`style/offline.json` both returned 200 on 2026-09-20.
+
+**Open: what "PMTiles for offline" means here.** There are two designs, and they
+build different things:
+1. **Server-side, as before.** The worker serves tiles from the PMTiles file, and
+   the app saves a region through MapLibre's own offline download. That reuses
+   infrastructure that already runs.
+2. **On the device.** The app keeps a `.pmtiles` file for each region and MapLibre
+   reads it directly. There is nothing to host per request, but the regions have to
+   come from somewhere.
+Online does not depend on this choice, so it is being built first.
+
+**Crossing 1 revisited.** MapLibre owns its own projection. The extracted
+`EquirectangularProjection` loses its callers when the Canvas map goes, and it will
+be deleted rather than kept. What carries over is the lesson: the accuracy area is
+now a true ground ring in coordinates, built and tested without a map in
+`MapOverlayBuilder`, and MapLibre projects it.
+
+**Memory, measured.** A second out-of-memory kill came during the first MapLibre
+build and restarted the container. Measured with the emulator off, the build's Java
+processes peaked at 3.4 GB: 2.4 GB Gradle daemon and 0.9 GB Kotlin daemon. About
+4 GB is already in use outside this work. The emulator on top of that exhausts 11
+GB. From now on, APKs are built first, Gradle is stopped, and only then does the
+emulator start. The debug APK is 59.7 MB, because MapLibre ships native code for
+four CPU types. Splitting by architecture is a release task.
+
+## Superseded: D before the decision
 
 Crossing 3 above decided where tiles live. What it did not decide is **whose tiles**,
 and that is not mine to pick:
