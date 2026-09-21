@@ -8,6 +8,7 @@ import com.zynergy.forager.data.inaturalist.UnavailableTerrainSource
 import com.zynergy.forager.data.openmeteo.OpenMeteoWeatherSource
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.port.Clock
+import com.zynergy.forager.domain.port.LocationSource
 import com.zynergy.forager.domain.port.IdSource
 import com.zynergy.forager.domain.usecase.AssessPlanTiming
 import com.zynergy.forager.domain.usecase.PlanTrip
@@ -74,6 +75,7 @@ class UuidIdSource : IdSource {
 /** One place the graph is assembled, so no screen constructs its own dependencies. */
 class AppContainer(context: Context) {
     private val stores = ForagerStores.open(context)
+    val location: LocationSource = AndroidLocationSource(context)
     private val catalog = INaturalistCatalog(AndroidHttpTransport())
     private val terrain = UnavailableTerrainSource()
     private val weather = OpenMeteoWeatherSource(AndroidHttpTransport())

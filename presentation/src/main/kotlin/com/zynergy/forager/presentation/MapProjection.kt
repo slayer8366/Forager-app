@@ -2,6 +2,7 @@ package com.zynergy.forager.presentation
 
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
+import kotlin.math.cos
 
 /** A point on the canvas, in pixels from the top left. */
 data class ScreenPoint(val x: Float, val y: Float)
@@ -53,7 +54,28 @@ class EquirectangularProjection(
     /** Whether a coordinate is inside the view, so a caller can skip drawing what would not show. */
     fun isVisible(at: Coordinates): Boolean = view.contains(at)
 
+    /**
+     * How many pixels a ground distance spans at a coordinate, horizontally and vertically.
+     *
+     * Two numbers, not one, because this projection stretches longitude: a degree of longitude
+     * covers less ground the further from the equator it is, so a circle on the ground is an
+     * ellipse on this canvas. Drawing an accuracy radius as a plain circle would understate the
+     * uncertainty in one direction.
+     */
+    fun radiiFor(metres: Double, at: Coordinates): ScreenPoint {
+        val metresPerDegreeLongitude = METRES_PER_DEGREE_LATITUDE * cos(Math.toRadians(at.latitude))
+        return ScreenPoint(
+            x = ((metres / metresPerDegreeLongitude) / lonSpan * widthPx).toFloat(),
+            y = ((metres / METRES_PER_DEGREE_LATITUDE) / latSpan * heightPx).toFloat(),
+        )
+    }
+
     /** The canvas rectangle an area covers, as top-left and bottom-right. */
     fun rectFor(area: BoundingBox): Pair<ScreenPoint, ScreenPoint> =
         toScreen(Coordinates(area.north, area.west)) to toScreen(Coordinates(area.south, area.east))
+
+    private companion object {
+        /** Mean length of a degree of latitude. Varies by under 1% pole to equator. */
+        const val METRES_PER_DEGREE_LATITUDE = 111_320.0
+    }
 }

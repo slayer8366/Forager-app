@@ -15,7 +15,7 @@ data class JournalEntry(
     val recordedAt: Instant,
     val species: Species?,
     val notes: String,
-    val where: Coordinates?,
+    val where: Fix?,
     val photoCount: Int = 0,
 ) {
     init {
@@ -26,6 +26,14 @@ data class JournalEntry(
         require(photoCount >= 0) { "photoCount cannot be negative" }
     }
 
-    /** True when the entry can be placed on the map. Entries without a fix are still valid. */
+    /** True when the entry can be placed on the map at all. Entries without a fix are still valid. */
     val isMappable: Boolean get() = where != null
+
+    /**
+     * True when the fix is tight enough to stand for the find's actual location.
+     *
+     * Kept separate from [isMappable] so a coarse fix can still be drawn, as the circle it really
+     * is, rather than either vanishing from the map or being rendered as a confident point.
+     */
+    val hasPreciseLocation: Boolean get() = where?.isPreciseEnoughForAFind == true
 }

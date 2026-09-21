@@ -1,5 +1,8 @@
 package com.zynergy.forager.app
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -40,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zynergy.forager.domain.Coordinates
+import com.zynergy.forager.domain.Fix
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
@@ -82,7 +86,37 @@ class JournalScreenState(private val container: AppContainer) {
         }
     }
 
-    suspend fun addQuickNote(note: String, where: Coordinates?) {
+    /** The fix attached to the next entry, and what to say about trying to get one. */
+    var pendingFix by mutableStateOf<Fix?>(null)
+        private set
+    var locationNotice by mutableStateOf<Notice?>(null)
+        private set
+    var locating by mutableStateOf(false)
+        private set
+
+    suspend fun captureLocation() {
+        locating = true
+        locationNotice = null
+        when (val outcome = container.location.currentFix()) {
+            is Outcome.Ok -> pendingFix = outcome.value
+            is Outcome.Partial -> {
+                pendingFix = outcome.value
+                locationNotice = Notice.Incomplete(outcome.note)
+            }
+            is Outcome.Failed -> locationNotice = Notice.Problem(outcome.reason)
+            is Outcome.Unsupported -> locationNotice = Notice.NotAvailable(outcome.capability)
+        }
+        locating = false
+    }
+
+    fun hasLocationPermission(): Boolean = container.location.hasPermission()
+
+    fun clearPendingFix() {
+        pendingFix = null
+        locationNotice = null
+    }
+
+    suspend fun addQuickNote(note: String, where: Fix?) {
         when (val outcome = container.recordSighting(species = null, notes = note, where = where)) {
             is Outcome.Ok -> entries.add(0, outcome.value)
             is Outcome.Partial -> entries.add(0, outcome.value)
@@ -102,6 +136,79 @@ private fun NoticeLine(notice: Notice, tag: String = "notice") {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag(tag)) {
         Text(prefix, color = colour, fontWeight = FontWeight.Medium)
         Text(detail, color = colour, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/**
+ * Asking for a position, and saying plainly what came back.
+ *
+ * Permission is requested when the button is pressed rather than on launch, so the request arrives
+ * attached to a reason the user can see. A fix too coarse to pin a find is still offered, labelled
+ * with its radius, because "somewhere in these 400 metres" is worth recording and is not the same
+ * claim as a point.
+ */
+@Composable
+private fun LocationRow(state: JournalScreenState) {
+    val scope = rememberCoroutineScope()
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) scope.launch { state.captureLocation() }
+    }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(
+                onClick = {
+                    if (state.hasLocationPermission()) {
+                        scope.launch { state.captureLocation() }
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }
+                },
+                modifier = Modifier.testTag("capture-location"),
+            ) { Text(if (state.pendingFix == null) "Add my location" else "Update location") }
+
+            if (state.pendingFix != null) {
+                Spacer(Modifier.padding(4.dp))
+                OutlinedButton(
+                    onClick = { state.clearPendingFix() },
+                    modifier = Modifier.testTag("clear-location"),
+                ) { Text("Remove") }
+            }
+        }
+
+        if (state.locating) {
+            Text(
+                "Waiting for a fix...",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp).testTag("locating"),
+            )
+        }
+
+        state.pendingFix?.let { fix ->
+            Text(
+                if (fix.isPreciseEnoughForAFind) {
+                    "Location ready, accurate to about %.0f m".format(fix.accuracyMetres)
+                } else {
+                    "Location is only accurate to about %.0f m, which covers more ground than one patch"
+                        .format(fix.accuracyMetres)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (fix.isPreciseEnoughForAFind) Color(0xFF2E7D32) else Color(0xFF8A6D00),
+                modifier = Modifier.padding(top = 4.dp).testTag("fix-quality"),
+            )
+        }
+
+        state.locationNotice?.let { NoticeLine(it, tag = "location-notice") }
+
+        if (state.pendingFix == null && state.locationNotice == null && !state.locating) {
+            Text(
+                "Without a location this entry is still saved, just not placed on the map.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("no-location-note"),
+            )
+        }
     }
 }
 
@@ -130,7 +237,8 @@ fun JournalScreen(state: JournalScreenState) {
                     val text = note
                     if (text.isNotBlank()) {
                         scope.launch {
-                            state.addQuickNote(text, where = null)
+                            state.addQuickNote(text, where = state.pendingFix)
+                            state.clearPendingFix()
                             note = ""
                         }
                     }
@@ -138,12 +246,7 @@ fun JournalScreen(state: JournalScreenState) {
                 modifier = Modifier.testTag("save-note"),
             ) { Text("Save") }
         }
-        Text(
-            "Entries are saved without a location: this build cannot read the device's position " +
-                "yet, and a made-up coordinate would put your find somewhere you have never been.",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("no-location-note"),
-        )
+        LocationRow(state)
         state.loadFailure?.let {
             NoticeLine(Notice.Problem(it), tag = "journal-load-failure")
         }
@@ -309,10 +412,29 @@ fun MapScreen(
                 ),
             )
             located.forEach { entry ->
-                val at = entry.where ?: return@forEach
-                if (!projection.isVisible(at)) return@forEach
-                val point = projection.toScreen(at)
-                drawCircle(Color(0xFF1B5E20), radius = 9f, center = Offset(point.x, point.y))
+                val fix = entry.where ?: return@forEach
+                if (!projection.isVisible(fix.coordinates)) return@forEach
+                val point = projection.toScreen(fix.coordinates)
+                val centre = Offset(point.x, point.y)
+
+                // Every fix is drawn as the area it actually claims. Only a fix inside the app's
+                // accuracy limit also gets a solid dot, so a coarse one never reads as a point.
+                val radii = projection.radiiFor(fix.accuracyMetres, fix.coordinates)
+                drawOval(
+                    color = Color(0x331B5E20),
+                    topLeft = Offset(centre.x - radii.x, centre.y - radii.y),
+                    size = androidx.compose.ui.geometry.Size(radii.x * 2, radii.y * 2),
+                )
+                if (fix.isPreciseEnoughForAFind) {
+                    drawCircle(Color(0xFF1B5E20), radius = 9f, center = centre)
+                } else {
+                    drawCircle(
+                        Color(0xFF8A6D00),
+                        radius = 9f,
+                        center = centre,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f),
+                    )
+                }
             }
         }
 

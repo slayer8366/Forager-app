@@ -25,5 +25,5 @@ data class TripPlan(
 
     /** Whether a journal entry falls inside this plan's area, for reviewing a trip afterwards. */
     fun covers(entry: JournalEntry): Boolean =
-        entry.where?.let { area.contains(it) } == true
+        entry.where?.let { area.contains(it.coordinates) } == true
 }

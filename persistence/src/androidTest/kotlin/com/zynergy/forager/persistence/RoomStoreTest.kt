@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
+import com.zynergy.forager.domain.Fix
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
@@ -55,7 +56,7 @@ class RoomStoreTest {
             recordedAt = NOON,
             species = CHANTERELLE,
             notes = "under douglas fir",
-            where = Coordinates(47.5, -122.5),
+            where = Fix(Coordinates(47.5, -122.5), accuracyMetres = 8.0),
             photoCount = 3,
         )
         journal.save(entry)
@@ -66,7 +67,7 @@ class RoomStoreTest {
         assertEquals(NOON, read.recordedAt)
         assertEquals(CHANTERELLE, read.species)
         assertEquals("under douglas fir", read.notes)
-        assertEquals(Coordinates(47.5, -122.5), read.where)
+        assertEquals(Fix(Coordinates(47.5, -122.5), 8.0), read.where)
         assertEquals(3, read.photoCount)
     }
 
@@ -160,7 +161,7 @@ class DatabaseSurvivesReopeningTest {
     fun whatWasSavedIsStillThereAfterCloseAndReopen() = runTest {
         val first = Room.databaseBuilder(context, ForagerDatabase::class.java, name).build()
         RoomJournalStore(first.journalDao()).save(
-            JournalEntry("kept", NOON, CHANTERELLE, "in the moss", Coordinates(47.6, -122.4)),
+            JournalEntry("kept", NOON, CHANTERELLE, "in the moss", Fix(Coordinates(47.6, -122.4), 12.0)),
         )
         first.close()
 
@@ -172,6 +173,6 @@ class DatabaseSurvivesReopeningTest {
         assertEquals(1, entries.size)
         assertEquals("in the moss", entries.single().notes)
         assertEquals(CHANTERELLE, entries.single().species)
-        assertEquals(Coordinates(47.6, -122.4), entries.single().where)
+        assertEquals(Fix(Coordinates(47.6, -122.4), 12.0), entries.single().where)
     }
 }

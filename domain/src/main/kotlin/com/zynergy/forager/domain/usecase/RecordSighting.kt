@@ -1,6 +1,6 @@
 package com.zynergy.forager.domain.usecase
 
-import com.zynergy.forager.domain.Coordinates
+import com.zynergy.forager.domain.Fix
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Outcome
 import com.zynergy.forager.domain.Species
@@ -24,7 +24,7 @@ class RecordSighting(
     suspend operator fun invoke(
         species: Species?,
         notes: String = "",
-        where: Coordinates? = null,
+        where: Fix? = null,
         photoCount: Int = 0,
     ): Outcome<JournalEntry> {
         if (species == null && notes.isBlank()) {

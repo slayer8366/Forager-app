@@ -2,12 +2,21 @@ package com.zynergy.forager.persistence
 
 import com.zynergy.forager.domain.BoundingBox
 import com.zynergy.forager.domain.Coordinates
+import com.zynergy.forager.domain.Fix
 import com.zynergy.forager.domain.JournalEntry
 import com.zynergy.forager.domain.Species
 import com.zynergy.forager.domain.TaxonRank
 import com.zynergy.forager.domain.TripPlan
 import java.time.Instant
 import java.time.LocalDate
+
+/**
+ * Stands in for the accuracy of a pre-version-2 entry.
+ *
+ * Just above the app's usable limit, so such an entry is mappable but never counts as precise.
+ * Chosen to fail the check rather than to look like a measurement.
+ */
+internal const val UNKNOWN_ACCURACY_METRES = Fix.USABLE_ACCURACY_METRES + 1.0
 
 internal fun JournalEntry.toRow() = JournalEntryRow(
     id = id,
@@ -19,6 +28,7 @@ internal fun JournalEntry.toRow() = JournalEntryRow(
     notes = notes,
     latitude = where?.latitude,
     longitude = where?.longitude,
+    locationAccuracyMetres = where?.accuracyMetres,
     photoCount = photoCount,
 )
 
@@ -41,7 +51,17 @@ internal fun JournalEntryRow.toEntry(): JournalEntry {
                 ?: TaxonRank.UNKNOWN,
         )
     }
-    val where = if (latitude != null && longitude != null) Coordinates(latitude, longitude) else null
+    val where = if (latitude != null && longitude != null) {
+        Fix(
+            coordinates = Coordinates(latitude, longitude),
+            // Version 1 rows have no accuracy. Rather than invent one, they are treated as the
+            // coarsest thing the app will still draw, so an old entry is never shown as a
+            // confident point on the strength of a number that was never measured.
+            accuracyMetres = locationAccuracyMetres ?: UNKNOWN_ACCURACY_METRES,
+        )
+    } else {
+        null
+    }
     return JournalEntry(
         id = id,
         recordedAt = Instant.ofEpochMilli(recordedAtEpochMillis),

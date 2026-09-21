@@ -92,3 +92,7 @@ fun flatYear(count: Int): Map<java.time.Month, Int> =
 /** A year with [peak] in [peakMonth] and [rest] everywhere else. */
 fun yearPeaking(peakMonth: java.time.Month, peak: Int, rest: Int = 0): Map<java.time.Month, Int> =
     java.time.Month.entries.associateWith { if (it == peakMonth) peak else rest }
+
+/** A fix good enough to pin a find, for tests that only care that a location exists. */
+fun fixAt(latitude: Double, longitude: Double, accuracyMetres: Double = 8.0): Fix =
+    Fix(Coordinates(latitude, longitude), accuracyMetres)

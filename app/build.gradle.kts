@@ -34,6 +34,7 @@ dependencies {
     implementation(project(":presentation"))
     implementation(project(":persistence"))
     implementation(libs.coroutines.core)
+    implementation(libs.core.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)

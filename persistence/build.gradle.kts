@@ -15,6 +15,7 @@ android {
     defaultConfig {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 }
 
 dependencies {
@@ -29,5 +30,8 @@ dependencies {
     androidTestImplementation(libs.coroutines.test)
 }
 
-// Schema files are committed so a migration can be written against a recorded shape.
-ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+// Schemas are written straight into the instrumentation test's assets, and committed, so
+// MigrationTestHelper reads the real recorded shape of each past version. Putting them here rather
+// than in a neutral directory avoids AGP 9's source-set assets API, which rejects the usual
+// srcDir call with a ClassCastException.
+ksp { arg("room.schemaLocation", "$projectDir/src/androidTest/assets") }

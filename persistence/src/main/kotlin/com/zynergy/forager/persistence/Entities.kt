@@ -14,9 +14,9 @@ import androidx.room.PrimaryKey
  * catalog is unreachable, or if a taxon is renamed upstream after the find was recorded. The
  * record should say what the forager recorded at the time.
  *
- * Location is a plain latitude and longitude. There is no accuracy column: this build has no way
- * to read the device's position, so any accuracy value would be invented. It arrives with the
- * location work, in the same change as the code that reads it.
+ * Location is a latitude, a longitude, and the radius the device reported. The accuracy column
+ * arrived in version 2 alongside the code that reads it, which is why it is nullable: entries
+ * written by version 1 have no such reading, and that is different from a reading of zero.
  */
 @Entity(tableName = "journal_entry")
 data class JournalEntryRow(
@@ -29,6 +29,7 @@ data class JournalEntryRow(
     val notes: String,
     val latitude: Double?,
     val longitude: Double?,
+    @ColumnInfo(name = "location_accuracy_metres") val locationAccuracyMetres: Double?,
     @ColumnInfo(name = "photo_count") val photoCount: Int,
 )
 

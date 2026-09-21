@@ -121,4 +121,24 @@ class MapProjectionTest {
         assertClose(W / 3, topLeft.x)
         assertClose(2 * W / 3, bottomRight.x)
     }
+
+    @Test
+    fun `a degree of latitude of ground spans the canvas height divided by the view's span`() {
+        // The view is 3 degrees tall on a 400 px canvas, so one degree is 133.3 px.
+        val radii = projection().radiiFor(111_320.0, Coordinates(47.5, -122.5))
+        assertClose(H / 3, radii.y, tolerance = 0.5f)
+    }
+
+    @Test
+    fun `a ground circle is wider than tall here, because longitude degrees shrink with latitude`() {
+        val at = Coordinates(47.5, -122.5)
+        val radii = projection().radiiFor(500.0, at)
+
+        // Degrees are the same pixel size both ways in this view (600/3 and 400/3 are not, so
+        // normalise): the ratio of pixel radii should be 1/cos(latitude) times the pixel aspect.
+        val pixelAspect = (W / 3) / (H / 3)
+        val expected = pixelAspect / kotlin.math.cos(Math.toRadians(47.5)).toFloat()
+        assertClose(expected, radii.x / radii.y, tolerance = 0.01f)
+        assertTrue(radii.x > radii.y)
+    }
 }

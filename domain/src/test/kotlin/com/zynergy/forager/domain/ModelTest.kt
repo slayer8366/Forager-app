@@ -101,7 +101,7 @@ class JournalEntryTest {
 
     @Test
     fun `an entry with a fix is mappable`() {
-        val entry = JournalEntry("e1", when0, CHANTERELLE, "", Coordinates(47.5, -122.5))
+        val entry = JournalEntry("e1", when0, CHANTERELLE, "", fixAt(47.5, -122.5))
         assertTrue(entry.isMappable)
     }
 }

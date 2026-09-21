@@ -78,7 +78,7 @@ class RecordSightingTest {
         val store = FakeJournalStore()
         val result = RecordSighting(store, FixedClock(NOW, TODAY), SequentialIds("entry-"))(
             species = CHANTERELLE,
-            where = Coordinates(47.5, -122.5),
+            where = fixAt(47.5, -122.5),
         )
 
         val ok = assertIs<Outcome.Ok<JournalEntry>>(result)
@@ -150,8 +150,8 @@ class PlanTripTest {
         val ok = assertIs<Outcome.Ok<TripPlan>>(
             planner(store)("Walk", TODAY, PUGET_SOUND, listOf(CHANTERELLE)),
         )
-        val inside = JournalEntry("a", NOW, CHANTERELLE, "", Coordinates(47.5, -122.5))
-        val outside = JournalEntry("b", NOW, CHANTERELLE, "", Coordinates(40.0, -100.0))
+        val inside = JournalEntry("a", NOW, CHANTERELLE, "", fixAt(47.5, -122.5))
+        val outside = JournalEntry("b", NOW, CHANTERELLE, "", fixAt(40.0, -100.0))
         val noFix = JournalEntry("c", NOW, CHANTERELLE, "", null)
 
         assertTrue(ok.value.covers(inside))
