@@ -571,3 +571,14 @@ found.
 
 Suites after the ruling: domain 99, data 50, presentation 50 (JUnit XML); persistence on device 18,
 app on device 8 (`am instrument`).
+
+## Next: the fruiting forecast in the app, researched 2026-09-20
+
+Research and plan in `docs/research/2026-09-20-forecast-integration-and-map-layering.md`.
+Nothing built. The short version: the forecast project publishes dated PMTiles plus a weather-cell
+vector companion and a manifest (its D6), and the app becomes a client of those artifacts only. The
+cell layer goes on the map as one data-driven FillLayer below the existing overlays, five bands,
+masked cells undrawn, tap for the number with its reference class, uncertainty, drivers and dates.
+Offline needs a per-area form of the vector companion, which is a forecast-repo decision. Six
+owner decisions are listed in the document's section 7; F0 (the artifact contract) and F1 (an
+honest "no forecast published yet" source) can start before the model exists.
