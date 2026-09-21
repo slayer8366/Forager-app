@@ -317,6 +317,7 @@ private fun IdentificationEditor(
     entries: List<JournalEntry>,
     search: suspend (String) -> SpeciesSearchUiState,
     tagPrefix: String,
+    status: String = form.status,
 ) {
     val scope = rememberCoroutineScope()
     var results by remember { mutableStateOf(SpeciesSearchUiState()) }
@@ -347,7 +348,7 @@ private fun IdentificationEditor(
             ) { Text("Search") }
         }
         Text(
-            form.status,
+            status,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 4.dp).testTag("$tagPrefix-identification-status"),
         )
@@ -530,6 +531,7 @@ private fun JournalEntryCard(
                         entries = state.entries,
                         search = state::searchNames,
                         tagPrefix = "change",
+                        status = changeForm.changeStatus,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
@@ -539,12 +541,24 @@ private fun JournalEntryCard(
                                     if (changeNotice == null) changing = false
                                 }
                             },
+                            enabled = changeForm.canSaveAsChange,
                             modifier = Modifier.testTag("entry-change-save-${entry.id}"),
                         ) { Text("Save identification") }
                         TextButton(
                             onClick = { changing = false; changeNotice = null },
                             modifier = Modifier.testTag("entry-change-cancel-${entry.id}"),
                         ) { Text("Cancel") }
+                    }
+                    if (entry.identification != Identification.Unidentified) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    changeNotice = state.reidentify(entry, Identification.Unidentified)
+                                    if (changeNotice == null) changing = false
+                                }
+                            },
+                            modifier = Modifier.testTag("entry-mark-unidentified-${entry.id}"),
+                        ) { Text("Mark as unidentified") }
                     }
                     changeNotice?.let { NoticeLine(it, tag = "entry-change-notice", problemTitle = "Not changed") }
                 }

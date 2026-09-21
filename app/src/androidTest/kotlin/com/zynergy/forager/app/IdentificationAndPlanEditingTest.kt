@@ -1,6 +1,7 @@
 package com.zynergy.forager.app
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
@@ -172,6 +173,38 @@ class IdentificationAndPlanEditingTest {
             rule.onNodeWithTag("entry-history-${entry.id}-2").performScrollTo()
                 .assertTextContains("Common Morel", substring = true)
                 .assertTextContains("(current)", substring = true)
+        }
+    }
+
+    /**
+     * Changing a named entry needs an explicit choice. An empty change form cannot be saved, so one
+     * tap of Save cannot replace a name with Unidentified; going back to Unidentified is its own
+     * button, and it appends to the history like any other change.
+     */
+    @Test
+    fun anEmptyChangeCannotBeSavedAndUnidentifiedIsItsOwnAction() {
+        val entry = seedEntry(Identification.Taxon(MOREL, TaxonSource.SEARCH), "explicit change test $run")
+
+        launch {
+            rule.onNodeWithTag("journal-list").performScrollToNode(hasTestTag("entry-${entry.id}"))
+            rule.onNodeWithTag("entry-identification-${entry.id}", useUnmergedTree = true).performClick()
+            rule.onNodeWithTag("entry-change-${entry.id}").performScrollTo().performClick()
+
+            rule.onNodeWithTag("change-identification-status")
+                .assertTextEquals("Type or choose a name. Nothing is saved until you do.")
+            rule.onNodeWithTag("entry-change-save-${entry.id}").performScrollTo().assertIsNotEnabled()
+            rule.onNodeWithTag("entry-change-save-${entry.id}").performClick()
+            rule.waitForIdle()
+            Thread.sleep(1_000)
+            assertEquals(1, entryWithNote(entry.notes)!!.identifications.size)
+
+            rule.onNodeWithTag("entry-mark-unidentified-${entry.id}").performScrollTo().performClick()
+            rule.waitUntil(WAIT_MS) { entryWithNote(entry.notes)!!.identifications.size == 2 }
+
+            assertEquals(
+                listOf(Identification.Taxon(MOREL, TaxonSource.SEARCH), Identification.Unidentified),
+                entryWithNote(entry.notes)!!.identifications.map { it.identification },
+            )
         }
     }
 
