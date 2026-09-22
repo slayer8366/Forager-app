@@ -123,3 +123,12 @@ uncertainty, and what was found. "None checked" is allowed; a blank is not.
   shot, so a single entry would be wrong most of the time while looking right.
 - Silent distortion or perspective correction. Zynergy's rule holds: surface the
   evidence, never auto-correct.
+
+## Correction, 2026-09-21
+
+The state line above says the RAW pipeline port is "at stage 1, branch
+`raw-pipeline`". Wrong. At `89f53a4` no branch by that name exists on
+`slayer8366/Forager` (Phase 1 report, premise check). The stage 1
+dispatch that creates the branch has been written but not run. The
+planner had the branch list in hand and did not check it against the
+handoff. Nothing in this brief depends on the branch existing.
