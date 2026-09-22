@@ -252,6 +252,7 @@ annotation processing fails under 2.4.20 that is the finding rather than a surpr
   2. **Record from the species.** A result on the Species tab gets a "Record a
      find" action that opens the journal with that species filled in.
   They are not exclusive, but they build different screens.
+- **Field measurement, Phase 1 report landed (2026-09-21):** `docs/research/2026-09-21-field-measurement-phase1-report.md`.
 
 ## D, the basemap: decided 2026-09-20
 
